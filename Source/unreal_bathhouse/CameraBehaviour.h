@@ -7,9 +7,6 @@
 #include <memory>
 #include "CameraBehaviour.generated.h"
 
-FORCEINLINE FVector GetRandomVectorInBounds(const FBoxBounds& Bounds);
-
-FORCEINLINE static FVector ConvertUnityToUE(const FVector& UnityVector, bool bIsLocation = true);
 
 class FBoundManager
 {
@@ -39,9 +36,9 @@ public:
 
     ECameraDirectionType DirectionType;
     float Freq;
+    float Duration;
     FString Name;
     int32 Index;
-    float Duration;
 
     FVector From;
     FVector At;

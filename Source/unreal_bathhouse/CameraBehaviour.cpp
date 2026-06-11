@@ -1,33 +1,11 @@
 ﻿#include "CameraBehaviour.h"
 #include "UniqueRandom.h"
+#include "BathhouseMath.h"
 #include "Camera/CameraComponent.h"
 #include "Kismet/KismetMathLibrary.h"
 #include "Kismet/GameplayStatics.h"
 #include "Algo/SelectRandomWeighted.h"
 #include "DrawDebugHelpers.h"
-
-FORCEINLINE FVector GetRandomVectorInBounds(const FBoxBounds& Bounds)
-{
-	return FVector(
-		FMath::RandRange(Bounds.Min.X, Bounds.Max.X),
-		FMath::RandRange(Bounds.Min.Y, Bounds.Max.Y),
-		FMath::RandRange(Bounds.Min.Z, Bounds.Max.Z)
-	);
-}
-
-FORCEINLINE static FVector ConvertUnityToUE(const FVector& UnityVector, bool bIsLocation)
-{
-	// 1. Меняем оси местами: Unity Z становится вперед (X), Unity X становится вправо (Y), Unity Y становится вверх (Z)
-	FVector ReplacedAxes = FVector(UnityVector.Z, UnityVector.X, UnityVector.Y);
-
-	// 2. Если это точка/позиция, переводим метры в сантиметры. Если это вектор направления — оставляем масштаб 1:1
-	if (bIsLocation)
-	{
-		return ReplacedAxes * 100.0f;
-	}
-
-	return ReplacedAxes;
-}
 
 // --- REALIZATION: UCameraBase ---
 TPair<FVector, FVector> UCameraBase::Invoke(float NormalizedTime)
@@ -156,8 +134,8 @@ FLinearRandom::FLinearRandom(float InFreq, float InDuration, FCameraMathFunc InF
 
 void FLinearRandom::Reset(const FBoundParameters& BoundParameters)
 {
-	A = GetRandomVectorInBounds(BoundParameters.Bound);
-	B = GetRandomVectorInBounds(BoundParameters.Bound);
+	A = FBathhouseMath::GetRandomVectorInBounds(BoundParameters.Bound);
+	B = FBathhouseMath::GetRandomVectorInBounds(BoundParameters.Bound);
 }
 
 // --- REALIZATION: FStaticCamera ---
