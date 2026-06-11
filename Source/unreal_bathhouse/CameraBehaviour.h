@@ -7,8 +7,9 @@
 #include <memory>
 #include "CameraBehaviour.generated.h"
 
-// Вспомогательная функция (Аналог Vector3Extender.Random)
 FORCEINLINE FVector GetRandomVectorInBounds(const FBoxBounds& Bounds);
+
+FORCEINLINE static FVector ConvertUnityToUE(const FVector& UnityVector, bool bIsLocation = true);
 
 class FBoundManager
 {
@@ -31,8 +32,6 @@ public:
     void Reset(FString Description);
 };
 
-
-// --- 1. КЛАССЫ ТРАЕКТОРИЙ ---
 class UCameraBase
 {
 public:
@@ -102,7 +101,6 @@ public:
     virtual void Reset(const FBoundParameters& Bounds) override {}
 };
 
-// --- 2. МЕНЕДЖЕР ВРЕМЕНИ И МОДЕЛЕЙ ---
 enum class ESunCircle : uint8 { Day, Night };
 
 class FTimeManager
@@ -148,7 +146,7 @@ public:
     void ResetModel();
 };
 
-// --- 3. ГЛАВНЫЙ АКТОР КАМЕРЫ ---
+// --- ГЛАВНЫЙ АКТОР КАМЕРЫ ---
 UCLASS()
 class UNREAL_BATHHOUSE_API ACameraBehaviour : public AActor
 {
