@@ -1,4 +1,4 @@
-#include "CameraModelManager.h"
+﻿#include "CameraModelManager.h"
 
 #include "CameraBase.h"
 #include "LinearRandom.h"
@@ -20,13 +20,14 @@ FCameraModelManager::FCameraModelManager(FBoundParameters& BoundParameters)
 	float RarelyFreq = 0.3f;
 	float StaticFreq = (1.0f - (OftenFreq + RarelyFreq)) / 6.0f;
 
-	FUnityVector Static0_From = FUnityVector(6.00f, -0.63f, 1.97f) * 100.0f;
-	FUnityVector Static0_A = FUnityVector(0.00f, -5.00f, 1.97f) * 100.0f;
-	FUnityVector Static0_B = FUnityVector(0.00f, 5.00f, 1.97f) * 100.0f;
-
 	CameraModels.Add(std::make_shared<FLinearBase>(OftenFreq, DurationInSeconds, LinearLerp, TEXT("Linear"), BoundParameters, ECameraDirectionType::Center));
 	CameraModels.Add(std::make_shared<FLinearRandom>(RarelyFreq, DurationInSeconds, LinearLerp, TEXT("Random"), BoundParameters, ECameraDirectionType::Center));
+
+	FUnityVector Static0_From = FUnityVector(-0.63f, 1.97f, +6.00f);
+	FUnityVector Static0_A = FUnityVector(-5.0f, 1.97f, 0.0f);
+	FUnityVector Static0_B = FUnityVector(+5.0f, 1.97f, 0.0f);
 	CameraModels.Add(std::make_shared<FStaticCamera>(StaticFreq, DurationInSeconds, [Static0_From](float, UCameraBase*) { return Static0_From; }, LinearLerp, Static0_A, Static0_B, TEXT("Static0")));
+	CameraModels.Add(std::make_shared<FStaticCamera>(StaticFreq, DurationInSeconds, [Static0_From](float, UCameraBase*) { return Static0_From; }, LinearLerp, Static0_B, Static0_A, TEXT("Static1")));
 
 	for (int32 i = 0; i < CameraModels.Num(); ++i)
 	{

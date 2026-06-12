@@ -67,16 +67,21 @@ void ACameraBehaviour::Tick(float DeltaTime)
 
 	/*
 	// --- ОТЛАДОЧНЫЙ БЛОК ДОЛЖЕН СТОЯТЬ СТРОГО ТУТ (В САМОМ КОНЦЕ TICK) ---
-	if (GetWorld())
+	if (GetWorld() && BoundManager)
 	{
 		FBoundParameters ActiveBound = BoundManager->GetActiveBound();
-		FVector Center = ActiveBound.Bound.Min + (ActiveBound.Bound.Size / 2.0f);
+    
+		// Находим центр в системе Unity
+		FUnityVector UnityCenter = ActiveBound.Bound.Min + (ActiveBound.Bound.Size / 2.0f);
+    
+		// Конвертируем центр и размер в систему UE5
+		FVector UECenter = UnityCenter.ToUE(true);
+		FVector UESize   = ActiveBound.Bound.Size.ToUE(false); // false, так как это вектор размера/направления, а не точка
 
 		// Рисуем коробку зоны съёмки (синяя)
-		DrawDebugBox(GetWorld(), Center, ActiveBound.Bound.Size / 2.0f, FColor::Blue, false, 0.0f, 0, 5.0f);
-
-		// Рисуем целевую точку, куда камера сейчас смотрит (зеленая сфера)
-		// Теперь компилятор видит переменную LookAt, созданную выше!
+		DrawDebugBox(GetWorld(), UECenter, UESize / 2.0f, FColor::Blue, false, 0.0f, 0, 5.0f);
+    
+		// Рисуем точку фокуса камеры (зеленая сфера)
 		DrawDebugSphere(GetWorld(), LookAt, 50.0f, 8, FColor::Green, false, 0.0f, 0, 2.0f);
 	}
 	*/
