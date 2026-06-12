@@ -1,6 +1,6 @@
 #pragma once
 
-#include "CoreMinimal.h"
+#include "Math/Vector.h"
 #include <functional>
 
 // --- ПЕРЕЧИСЛЕНИЯ (С поддержкой Blueprints) ---
@@ -17,6 +17,12 @@ enum class EDirectionType : uint8
     X,
     Y,
     Z
+};
+
+enum class ESunCircle : uint8 
+{
+    Day,
+    Night
 };
 
 // --- СТРУКТУРЫ ДАННЫХ ---
