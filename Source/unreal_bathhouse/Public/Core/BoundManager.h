@@ -12,9 +12,9 @@ private:
 
     // Конвертация Unity FromZero -> UE5
     // Unity Center (X, Y_высота, Z_вперед) и Size (X, Y_высота, Z_вперед)
-    static FBoxBounds FromZeroUE(FVector Center, FVector Size);
+    static FBoxBounds FromZeroUE(FUnityVector Center, FUnityVector Size);
 
-    static FBoxBounds FromMinMaxUE(FVector Min, FVector Max);
+    static FBoxBounds FromMinMaxUE(FUnityVector Min, FUnityVector Max);
 
 public:
     FBoundManager();

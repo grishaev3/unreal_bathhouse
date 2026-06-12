@@ -16,7 +16,7 @@ private:
 
     std::unique_ptr<class FUniqueRandom> UniqueRandomProvider; // Используем class-forward declaration
 
-    static FVector LinearLerp(float NormalizedTime, UCameraBase* Model);
+    static FUnityVector LinearLerp(float NormalizedTime, UCameraBase* Model);
 
 public:
     FCameraModelManager(FBoundParameters& BoundParameters);

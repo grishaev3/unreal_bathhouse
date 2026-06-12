@@ -1,5 +1,6 @@
 #pragma once
 
+#include "UnityVector.h"
 #include "Math/Vector.h"
 #include <functional>
 
@@ -28,15 +29,15 @@ enum class ESunCircle : uint8
 // --- СТРУКТУРЫ ДАННЫХ ---
 struct FBoxBounds
 {
-    FVector Min;
-    FVector Max;
-    FVector Size;
+    FUnityVector Min;
+    FUnityVector Max;
+    FUnityVector Size;
 };
 
 struct FBoundParameters
 {
     FBoxBounds Bound;
-    TArray<FVector> CameraMovesets;
+    TArray<FUnityVector> CameraMovesets;
     FString Description;
 };
 
@@ -44,4 +45,4 @@ struct FBoundParameters
 class UCameraBase;
 
 // Аналог C# Func<float, CameraBase, Vector3>
-typedef std::function<FVector(float, UCameraBase*)> FCameraMathFunc;
+typedef std::function<FUnityVector(float, UCameraBase*)> FCameraMathFunc;

@@ -29,17 +29,21 @@ void ACameraBehaviour::BeginPlay()
 	OnPeriodEnd(BIG_NUMBER);
 }
 
+/// <summary>
+/// Точка синхронизации координат Unity <=> UE
+/// </summary>
+/// <param name="DeltaTime"></param>
 void ACameraBehaviour::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
-	if (!ModelManager || !TimeManager || !BoundManager) 
+	if (!ModelManager || !TimeManager || !BoundManager)
 	{
 		return;
 	}
 
 	UCameraBase* ActiveModel = ModelManager->GetActiveModel();
-	if (!ActiveModel) 
+	if (!ActiveModel)
 	{
 		return;
 	}
@@ -47,13 +51,18 @@ void ACameraBehaviour::Tick(float DeltaTime)
 	float NormalizedTime = 0.0f;
 	TimeManager->UpdateNormalizedTime(ActiveModel, NormalizedTime);
 
-	TPair<FVector, FVector> TransformPair = ActiveModel->Invoke(NormalizedTime);
-	FVector LookFrom = TransformPair.Key;
-	FVector LookAt = TransformPair.Value;
+	// 1. Получаем чистые Unity-координаты из математической модели
+	TPair<FUnityVector, FUnityVector> TransformPair = ActiveModel->Invoke(NormalizedTime);
+	FUnityVector UnityFrom = TransformPair.Key;
+	FUnityVector UnityAt = TransformPair.Value;
 
-	// Применяем позицию и поворот к камере
-	SetActorLocation(LookFrom);
-	FRotator TargetRotation = UKismetMathLibrary::FindLookAtRotation(LookFrom, LookAt);
+	// 2. ТОЧКА СИНХРОНИЗАЦИИ: Конвертируем в UE5 только в момент применения к трансформу
+	FVector UELocation = UnityFrom.ToUE(true);  // Перевод позиции (метры -> см + оси)
+	FVector UELookAt = UnityAt.ToUE(true);    // Перевод точки взгляда
+
+	// 3. Применяем к Актору в Unreal Engine 5
+	SetActorLocation(UELocation);
+	FRotator TargetRotation = UKismetMathLibrary::FindLookAtRotation(UELocation, UELookAt);
 	SetActorRotation(TargetRotation);
 
 	/*

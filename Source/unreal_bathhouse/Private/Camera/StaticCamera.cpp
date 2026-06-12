@@ -1,7 +1,7 @@
 #include "StaticCamera.h"
 
 // --- REALIZATION: FStaticCamera ---
-FStaticCamera::FStaticCamera(float InFreq, float InDuration, FCameraMathFunc InFuncLookFrom, FCameraMathFunc InFuncLookTo, FVector InA, FVector InB, FString InName)
+FStaticCamera::FStaticCamera(float InFreq, float InDuration, FCameraMathFunc InFuncLookFrom, FCameraMathFunc InFuncLookTo, FUnityVector InA, FUnityVector InB, FString InName)
 {
 	Freq = InFreq;
 	A = InA;

@@ -5,12 +5,12 @@
 #include "StaticCamera.h"
 
 // --- REALIZATION: FCameraModelManager ---
-FVector FCameraModelManager::LinearLerp(float NormalizedTime, UCameraBase* Model)
+FUnityVector FCameraModelManager::LinearLerp(float NormalizedTime, UCameraBase* Model)
 {
-	if (!Model) return FVector::ZeroVector;
+	if (!Model) return FUnityVector::ZeroVector;
 
 	// Прямой полиморфный Lerp без искажения осей
-	return FMath::Lerp(Model->GetA(), Model->GetB(), NormalizedTime);
+	return FUnityVector::Lerp(Model->GetA(), Model->GetB(), NormalizedTime);
 }
 
 FCameraModelManager::FCameraModelManager(FBoundParameters& BoundParameters)
@@ -20,9 +20,9 @@ FCameraModelManager::FCameraModelManager(FBoundParameters& BoundParameters)
 	float RarelyFreq = 0.3f;
 	float StaticFreq = (1.0f - (OftenFreq + RarelyFreq)) / 6.0f;
 
-	FVector Static0_From = FVector(6.00f, -0.63f, 1.97f) * 100.0f;
-	FVector Static0_A = FVector(0.00f, -5.00f, 1.97f) * 100.0f;
-	FVector Static0_B = FVector(0.00f, 5.00f, 1.97f) * 100.0f;
+	FUnityVector Static0_From = FUnityVector(6.00f, -0.63f, 1.97f) * 100.0f;
+	FUnityVector Static0_A = FUnityVector(0.00f, -5.00f, 1.97f) * 100.0f;
+	FUnityVector Static0_B = FUnityVector(0.00f, 5.00f, 1.97f) * 100.0f;
 
 	CameraModels.Add(std::make_shared<FLinearBase>(OftenFreq, DurationInSeconds, LinearLerp, TEXT("Linear"), BoundParameters, ECameraDirectionType::Center));
 	CameraModels.Add(std::make_shared<FLinearRandom>(RarelyFreq, DurationInSeconds, LinearLerp, TEXT("Random"), BoundParameters, ECameraDirectionType::Center));

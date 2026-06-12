@@ -14,7 +14,7 @@ FLinearBase::FLinearBase(float InFreq, float InDuration, FCameraMathFunc InFunc,
 bool FLinearBase::IsDirection(float Value) { return FMath::Abs(Value) == 1.0f; }
 bool FLinearBase::IsBound(float Value) { return FMath::Abs(Value) == BIG_NUMBER; }
 
-EDirectionType FLinearBase::GetDirectionType(const FVector& V)
+EDirectionType FLinearBase::GetDirectionType(const FUnityVector& V)
 {
 	if (IsDirection(V.X)) return EDirectionType::X;
 	if (IsDirection(V.Y)) return EDirectionType::Y;
@@ -27,7 +27,7 @@ void FLinearBase::Reset(const FBoundParameters& BoundParameters)
 	FBoxBounds Bound = BoundParameters.Bound;
 
 	// Защита от пустого мувсета
-	FVector UnityDirection = BoundParameters.CameraMovesets.Num() > 0 ? BoundParameters.CameraMovesets[0] : FVector::ZeroVector;
+	FUnityVector UnityDirection = BoundParameters.CameraMovesets.Num() > 0 ? BoundParameters.CameraMovesets[0] : FUnityVector::ZeroVector;
 
 	// В Unity глубина рассчитывалась по Z. В UE5 это ось X (Вперед)
 	auto CalculateDepthUE = [&](const FBoxBounds& InBound) -> float {
@@ -58,8 +58,8 @@ void FLinearBase::Reset(const FBoundParameters& BoundParameters)
 		{
 			// Высота в Unity (Y) стала высотой в UE5 (Z)
 			float HeightZ = Bound.Min.Z + Bound.Size.Z * UnityDirection.Y;
-			A = FVector(DepthX, Start, HeightZ);
-			B = FVector(DepthX, End, HeightZ);
+			A = FUnityVector(DepthX, Start, HeightZ);
+			B = FUnityVector(DepthX, End, HeightZ);
 		}
 		break;
 
@@ -75,8 +75,8 @@ void FLinearBase::Reset(const FBoundParameters& BoundParameters)
 			End = Bound.Min.Z;
 		}
 		// Ось X в Unity стала осью Y в UE5
-		A = FVector(DepthX, UnityDirection.X * 100.0f, Start);
-		B = FVector(DepthX, UnityDirection.X * 100.0f, End);
+		A = FUnityVector(DepthX, UnityDirection.X * 100.0f, Start);
+		B = FUnityVector(DepthX, UnityDirection.X * 100.0f, End);
 		break;
 
 	default:

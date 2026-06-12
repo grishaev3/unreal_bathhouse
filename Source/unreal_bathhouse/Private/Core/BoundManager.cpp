@@ -1,10 +1,11 @@
+#include "UnityVector.h"
 #include "BoundManager.h"
 #include "DirectorCameraTypes.h"
 #include "Kismet/KismetMathLibrary.h"
 #include "Algo/SelectRandomWeighted.h"
 
 // --- REALIZATION: FBoundManager ---
-FBoxBounds FBoundManager::FromZeroUE(FVector Center, FVector Size)
+FBoxBounds FBoundManager::FromZeroUE(FUnityVector Center, FUnityVector Size)
 {
 	// Переводим метры из Unity в сантиметры Unreal Engine 5
 	Center *= 100.0f;
@@ -13,8 +14,8 @@ FBoxBounds FBoundManager::FromZeroUE(FVector Center, FVector Size)
 	FBoxBounds B;
 
 	// Перенос осей: Unity Z,X,Y -> UE5 X,Y,Z
-	FVector AdjustedCenter = FVector(Center.Z, Center.X, Center.Y);
-	FVector AdjustedSize = FVector(Size.Z, Size.X, Size.Y);
+	FUnityVector AdjustedCenter = FUnityVector(Center.Z, Center.X, Center.Y);
+	FUnityVector AdjustedSize = FUnityVector(Size.Z, Size.X, Size.Y);
 
 	// --- ИСПРАВЛЕНИЕ ВЫСОТЫ ---
 	// Добавляем к координате Z половину высоты бокса (AdjustedSize.Z / 2.0f),
@@ -28,19 +29,19 @@ FBoxBounds FBoundManager::FromZeroUE(FVector Center, FVector Size)
 	return B;
 }
 
-FBoxBounds FBoundManager::FromMinMaxUE(FVector Min, FVector Max)
+FBoxBounds FBoundManager::FromMinMaxUE(FUnityVector Min, FUnityVector Max)
 {
 	Min *= 100.0f;
 	Max *= 100.0f;
 
 	FBoxBounds B;
 	// Разворачиваем оси для векторов Min и Max по тому же правилу
-	FVector AdjustedMin = FVector(Min.Z, Min.X, Min.Y);
-	FVector AdjustedMax = FVector(Max.Z, Max.X, Max.Y);
+	FUnityVector AdjustedMin = FUnityVector(Min.Z, Min.X, Min.Y);
+	FUnityVector AdjustedMax = FUnityVector(Max.Z, Max.X, Max.Y);
 
 	// Выравниваем, чтобы Min гарантированно был меньше Max по всем осям в UE5
-	B.Min = FVector(FMath::Min(AdjustedMin.X, AdjustedMax.X), FMath::Min(AdjustedMin.Y, AdjustedMax.Y), FMath::Min(AdjustedMin.Z, AdjustedMax.Z));
-	B.Max = FVector(FMath::Max(AdjustedMin.X, AdjustedMax.X), FMath::Max(AdjustedMin.Y, AdjustedMax.Y), FMath::Max(AdjustedMin.Z, AdjustedMax.Z));
+	B.Min = FUnityVector(FMath::Min(AdjustedMin.X, AdjustedMax.X), FMath::Min(AdjustedMin.Y, AdjustedMax.Y), FMath::Min(AdjustedMin.Z, AdjustedMax.Z));
+	B.Max = FUnityVector(FMath::Max(AdjustedMin.X, AdjustedMax.X), FMath::Max(AdjustedMin.Y, AdjustedMax.Y), FMath::Max(AdjustedMin.Z, AdjustedMax.Z));
 	B.Size = B.Max - B.Min;
 	return B;
 }
@@ -48,17 +49,17 @@ FBoxBounds FBoundManager::FromMinMaxUE(FVector Min, FVector Max)
 FBoundManager::FBoundManager()
 {
 	// Инициализируем дефолтный мувсет (в UE MaxValue заменяем на BIG_NUMBER)
-	TArray<FVector> DefaultMoveset = {
-		FVector(1.0f, 0.5f, BIG_NUMBER),
-		FVector(1.0f, 0.5f, -BIG_NUMBER),
-		FVector(-1.0f, 0.5f, BIG_NUMBER),
-		FVector(-1.0f, 0.5f, -BIG_NUMBER)
+	TArray<FUnityVector> DefaultMoveset = {
+		FUnityVector(1.0f, 0.5f, BIG_NUMBER),
+		FUnityVector(1.0f, 0.5f, -BIG_NUMBER),
+		FUnityVector(-1.0f, 0.5f, BIG_NUMBER),
+		FUnityVector(-1.0f, 0.5f, -BIG_NUMBER)
 	};
 
 	// Наполняем массив зон с автоматической конвертацией координат под UE5
-	BoundsList.Add(FBoundParameters{ FromZeroUE(FVector(0.0f, 0.35f, -2.0f), FVector(5.0f, 2.40f, 3.0f)), DefaultMoveset, TEXT("Внутри дома 1-ый эт.") });
-	BoundsList.Add(FBoundParameters{ FromZeroUE(FVector(0.0f, 3.35f, -2.0f), FVector(3.40f, 2.00f, 3.0f)), DefaultMoveset, TEXT("Внутри дома 2-ой эт.") });
-	BoundsList.Add(FBoundParameters{ FromZeroUE(FVector(0.0f, 0.5f, -2.0f), FVector(8.0f, 6.0f, 12.0f)), DefaultMoveset, TEXT("Глобальный объём") });
+	BoundsList.Add(FBoundParameters{ FromZeroUE(FUnityVector(0.0f, 0.35f, -2.0f), FUnityVector(5.0f, 2.40f, 3.0f)), DefaultMoveset, TEXT("Внутри дома 1-ый эт.") });
+	BoundsList.Add(FBoundParameters{ FromZeroUE(FUnityVector(0.0f, 3.35f, -2.0f), FUnityVector(3.40f, 2.00f, 3.0f)), DefaultMoveset, TEXT("Внутри дома 2-ой эт.") });
+	BoundsList.Add(FBoundParameters{ FromZeroUE(FUnityVector(0.0f, 0.5f, -2.0f), FUnityVector(8.0f, 6.0f, 12.0f)), DefaultMoveset, TEXT("Глобальный объём") });
 }
 
 void FBoundManager::Reset(FString Description)
