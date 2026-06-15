@@ -1,5 +1,5 @@
-#include "BathhouseMath.h"
 #include "CameraBase.h"
+#include "BathhouseMath.h"
 
 // --- REALIZATION: UCameraBase ---
 TPair<FUnityVector, FUnityVector> UCameraBase::Invoke(float NormalizedTime)

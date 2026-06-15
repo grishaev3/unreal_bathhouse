@@ -1,5 +1,5 @@
-#include "UnityVector.h"
 #include "BoundManager.h"
+#include "UnityVector.h"
 #include "DirectorCameraTypes.h"
 #include "Kismet/KismetMathLibrary.h"
 #include "Algo/SelectRandomWeighted.h"
@@ -53,8 +53,8 @@ FBoundManager::FBoundManager()
 	};
 
 	// Наполняем массив зон с автоматической конвертацией координат под UE5
-	BoundsList.Add(FBoundParameters{ FromZeroUE(FUnityVector(0.0f, 0.35f, -2.0f), FUnityVector(5.0f, 2.40f, 3.0f)), DefaultMoveset, TEXT("Внутри дома 1-ый эт.") });
-	BoundsList.Add(FBoundParameters{ FromZeroUE(FUnityVector(0.0f, 3.35f, -2.0f), FUnityVector(3.40f, 2.00f, 3.0f)), DefaultMoveset, TEXT("Внутри дома 2-ой эт.") });
+	//BoundsList.Add(FBoundParameters{ FromZeroUE(FUnityVector(0.0f, 0.35f, -2.0f), FUnityVector(5.0f, 2.40f, 3.0f)), DefaultMoveset, TEXT("Внутри дома 1-ый эт.") });
+	//BoundsList.Add(FBoundParameters{ FromZeroUE(FUnityVector(0.0f, 3.35f, -2.0f), FUnityVector(3.40f, 2.00f, 3.0f)), DefaultMoveset, TEXT("Внутри дома 2-ой эт.") });
 	BoundsList.Add(FBoundParameters{ FromZeroUE(FUnityVector(0.0f, 0.5f, -2.0f), FUnityVector(8.0f, 6.0f, 12.0f)), DefaultMoveset, TEXT("Глобальный объём") });
 }
 

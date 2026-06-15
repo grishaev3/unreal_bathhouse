@@ -1,7 +1,6 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "DirectorCameraTypes.h"
 #include "CameraBase.h"
 
 class FTimeManager

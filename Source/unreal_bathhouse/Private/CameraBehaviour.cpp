@@ -1,8 +1,14 @@
-﻿#include "CameraBehaviour.h"
+﻿
+
+#include "CameraBehaviour.h"
+
 #include "BathhouseMath.h"
 #include "UniqueRandom.h"
 #include "BoundManager.h"
 #include "StaticCamera.h"
+
+#include <string>
+
 #include "Camera/CameraComponent.h"
 #include "Kismet/KismetMathLibrary.h"
 #include "Kismet/GameplayStatics.h"
@@ -20,11 +26,11 @@ void ACameraBehaviour::BeginPlay()
 	Super::BeginPlay();
 
 	// Инициализация менеджеров
-	TimeManager = std::make_unique<FTimeManager>(GetWorld());
-	BoundManager = std::make_unique<FBoundManager>();
+	TimeManager = MakeUnique<FTimeManager>(GetWorld());
+	BoundManager = MakeUnique<FBoundManager>();
 
 	FBoundParameters ActiveBound = BoundManager->GetActiveBound();
-	ModelManager = std::make_unique<FCameraModelManager>(ActiveBound);
+	ModelManager = MakeUnique<FCameraModelManager>(ActiveBound);
 
 	OnPeriodEnd(BIG_NUMBER);
 }
@@ -91,7 +97,10 @@ void ACameraBehaviour::Tick(float DeltaTime)
 
 void ACameraBehaviour::OnPeriodEnd(float NormalizedTime)
 {
-	if (NormalizedTime < 0.999f) return;
+	if (NormalizedTime < 0.999f) 
+	{
+		return;
+	}
 
 	// Сбрасываем таймер
 	if (TimeManager)
@@ -128,7 +137,10 @@ void ACameraBehaviour::OnPeriodEnd(float NormalizedTime)
 		UCameraBase* ActiveModel = ModelManager->GetActiveModel();
 		if (ActiveModel)
 		{
-			FString LogMessage = FString::Printf(TEXT("Camera Period Ended. New Model: %s"), *ActiveModel->Name);
+			FBoundParameters activeBound = BoundManager->GetActiveBound();
+
+			FString UEDescription = FString(activeBound.Description); // Универсальный конструктор UE
+			FString LogMessage = FString::Printf(TEXT("Camera Period Ended. New Model: %s %s"), *ActiveModel->Name, *UEDescription);
 
 			// Вывод на экран (зеленый текст на 5 секунд)
 			GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Green, LogMessage);
