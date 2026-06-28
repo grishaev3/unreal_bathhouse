@@ -485,6 +485,7 @@ FodyWeavers.xsd
 *.sln.iml
 
 *.blend1
+Shipping/
 
 ### VisualStudio Patch ###
 # Additional files built by Visual Studio

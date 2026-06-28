@@ -26,6 +26,9 @@
 			"Enabled": true
 		}
 	],
+	"AdditionalPluginDirectories": [
+		"Plugins"
+	],
 	"TargetPlatforms": [
 		"Windows"
 	]
