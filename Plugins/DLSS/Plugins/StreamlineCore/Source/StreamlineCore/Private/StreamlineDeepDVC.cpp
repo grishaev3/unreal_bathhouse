@@ -12,18 +12,15 @@
 #include "StreamlineCore.h"
 #include "StreamlineCorePrivate.h"
 #include "StreamlineAPI.h"
+#include "StreamlineRenderPass.h"
 #include "StreamlineRHI.h"
-#include "sl_helpers.h"
 #include "sl_deepdvc.h"
 #include "UIHintExtractionPass.h"
 
 #include "CoreMinimal.h"
-#include "Framework/Application/SlateApplication.h"
 #include "RenderGraphBuilder.h"
 #include "Runtime/Launch/Resources/Version.h"
 #include "ScenePrivate.h"
-#include "SystemTextures.h"
-#include "HAL/PlatformApplicationMisc.h"
 
 static TAutoConsoleVariable<int32> CVarStreamlineDeepDVCEnable(
 	TEXT("r.Streamline.DeepDVC.Enable"),
@@ -52,11 +49,6 @@ static TAutoConsoleVariable<float> CVarStreamlineDeepDVCSaturationBoost(
 	ECVF_Default);
 
 static Streamline::EStreamlineFeatureSupport GStreamlineDeepDVCSupport = Streamline::EStreamlineFeatureSupport::NotSupported;
-
-namespace
-{
-	float GLastDeepDVCVRAMEstimate = 0;
-}
 
 STREAMLINECORE_API Streamline::EStreamlineFeatureSupport QueryStreamlineDeepDVCSupport()
 {
@@ -94,14 +86,7 @@ STREAMLINECORE_API Streamline::EStreamlineFeatureSupport QueryStreamlineDeepDVCS
 			}
 		}
 
-		// setting this to true here so we don't recurse when we call GetDeepDVCStatusFromStreamline, which calls us
 		bStreamlineDeepDVCSupportedInitialized = true;
-
-		if (Streamline::EStreamlineFeatureSupport::Supported == GStreamlineDeepDVCSupport)
-		{
-			// to get the min suppported width/height
-			GetDeepDVCStatusFromStreamline();
-		}
 	}
 
 	return GStreamlineDeepDVCSupport;
@@ -139,38 +124,6 @@ bool IsDeepDVCActive()
 	}
 }
 
-
-
-DECLARE_STATS_GROUP(TEXT("DeepDVC"), STATGROUP_DeepDVC, STATCAT_Advanced);
-DECLARE_FLOAT_COUNTER_STAT(TEXT("DeepDVC: VRAM Estimate (MiB)"), STAT_DeepDVCVRAMEstimate, STATGROUP_DeepDVC);
-
-void GetDeepDVCStatusFromStreamline()
-{
-	GLastDeepDVCVRAMEstimate = 0;
-
-	if (IsStreamlineDeepDVCSupported())
-	{
-		// INSERT AWKWARD MUPPET FACE HERE
-
-    	//	static const auto CVarStreamlineViewIdOverride = IConsoleManager::Get().FindConsoleVariable(TEXT("r.Streamline.ViewIdOverride"));
-		//checkf(CVarStreamlineViewIdOverride && CVarStreamlineViewIdOverride->GetInt() != 0, TEXT("r.Streamline.ViewIdOverride must be set to 1 since DeepDVC only supports a single viewport."));
-
-		sl::ViewportHandle Viewport(0);
-
-		sl::DeepDVCState State;
-
-		sl::DeepDVCOptions StreamlineConstantsDeepDVC;
-
-		StreamlineConstantsDeepDVC.mode = SLDeepDVCModeFromCvar();
-
-		CALL_SL_FEATURE_FN(sl::kFeatureDeepDVC, slDeepDVCGetState, Viewport, State);
-
-		GLastDeepDVCVRAMEstimate = float(State.estimatedVRAMUsageInBytes) / (1024 * 1024);
-		SET_FLOAT_STAT(STAT_DeepDVCVRAMEstimate, GLastDeepDVCVRAMEstimate);
-	}
-
-}
-
 namespace
 {
 
@@ -202,7 +155,7 @@ void AddStreamlineDeepDVCStateRenderPass(FRDGBuilder& GraphBuilder, uint32 ViewI
 			return SLConstants;
 		},
 		// this lambda is only here since templating the function pointer and functin name and such below is inconvenient
-		[](FRHICommandListImmediate& RHICmdList, uint32 ViewID, const FIntRect& SecondaryViewRect, const sl::DeepDVCOptions& Options)
+		[](uint32 ViewID, const sl::DeepDVCOptions& Options)
 		{
 			CALL_SL_FEATURE_FN(sl::kFeatureDeepDVC, slDeepDVCSetOptions, sl::ViewportHandle(ViewID), Options);
 		}
@@ -237,7 +190,7 @@ void AddStreamlineDeepDVCEvaluateRenderPass(FStreamlineRHI* StreamlineRHIExtensi
 		{
 			check(PassParameters->SceneColorWithoutHUD);
 			PassParameters->SceneColorWithoutHUD->MarkResourceAsUsed();
-			FRHIStreamlineResource DeeDVCResource = FRHIStreamlineResource::FromRDGTextureAccess(PassParameters->SceneColorWithoutHUD, SecondaryViewRect, EStreamlineResource::ScalingOutputColor);
+			FRHIStreamlineResource DeeDVCResource = FRHIStreamlineResource::FromRDGTextureAccess(PassParameters->SceneColorWithoutHUD, SecondaryViewRect, sl::kBufferTypeScalingOutputColor);
 			
 			
 #if !ENGINE_PROVIDES_UE_5_6_ID3D12DYNAMICRHI_METHODS

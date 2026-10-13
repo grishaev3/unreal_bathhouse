@@ -42,7 +42,7 @@ class FStreamlineRHI;
 class DECLSPEC_UUID("0f9f6ae5-097d-4b49-a019-1ee4efab8f69") STREAMLINEDXGIRHI_API FStreamlineDXGISwapChainProxy : public IDXGISwapChain4
 {
 public:
-	FStreamlineDXGISwapChainProxy(IDXGISwapChain* InOriginal, const FStreamlineRHI* InStreamlineRHI = nullptr, bool bInIsStreamlineProxy = false);
+	FStreamlineDXGISwapChainProxy(IDXGISwapChain* InOriginal, FStreamlineRHI* InStreamlineRHI = nullptr, bool bInIsStreamlineProxy = false);
 	virtual ~FStreamlineDXGISwapChainProxy() = default;
 
 	FStreamlineDXGISwapChainProxy(const FStreamlineDXGISwapChainProxy&) = delete;
@@ -120,17 +120,17 @@ public:
 	 * @param InStreamlineRHI   Optional FStreamlineRHI to route DXGI errors through APIErrorHandler.
 	 * @return true if wrapping succeeded, false if the swap chain was left unchanged.
 	 */
-	static bool WrapSwapChain(IDXGISwapChain** ppSwapChain, const FStreamlineRHI* InStreamlineRHI = nullptr, bool bIsStreamlineProxy = false);
+	static bool WrapSwapChain(IDXGISwapChain** ppSwapChain, FStreamlineRHI* InStreamlineRHI = nullptr, bool bIsStreamlineProxy = false);
 
 	/** Typed overload for IDXGISwapChain1 */
-	static bool WrapSwapChain(IDXGISwapChain1** ppSwapChain, const FStreamlineRHI* InStreamlineRHI = nullptr, bool bIsStreamlineProxy = false);
+	static bool WrapSwapChain(IDXGISwapChain1** ppSwapChain, FStreamlineRHI* InStreamlineRHI = nullptr, bool bIsStreamlineProxy = false);
 
 private:
 	static bool IsSwapChainInterface(REFIID riid);
 
 	IDXGISwapChain* WrappedSwapchain;
 	TAtomic<LONG> RefCount;
-	const FStreamlineRHI* StreamlineRHI;
+	FStreamlineRHI* StreamlineRHI;
 	bool bIsStreamlineProxy;
 };
 

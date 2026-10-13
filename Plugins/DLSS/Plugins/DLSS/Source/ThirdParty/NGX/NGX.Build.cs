@@ -18,17 +18,37 @@ public class NGX : ModuleRules
 
 	protected virtual bool IsSupportedWindowsPlatform(ReadOnlyTargetRules Target)
 	{
-		return Target.Platform.IsInGroup(UnrealPlatformGroup.Windows);
+		return Target.Platform.IsInGroup(UnrealPlatformGroup.Windows) && (Target.Architecture == UnrealArch.X64);
 	}
 
 	protected virtual string GetPlatformDir(ReadOnlyTargetRules Target)
 	{
-		return Target.Platform.ToString();
+		string PlatformDir = Target.Platform.ToString();
+		// We don't ship with arm64 or arm64ec binaries yet, IsSupportedWindowsPlatform() above will return false for arm targets.
+		if (Target.Architecture == UnrealArch.Arm64)
+		{
+			PlatformDir = "WinArm64";
+		}
+		else if (Target.Architecture == UnrealArch.Arm64ec)
+		{
+			PlatformDir = "WinArm64ec";
+		}
+		return PlatformDir;
 	}
 
 	protected virtual string GetLibDir(ReadOnlyTargetRules Target)
 	{
-		return "x64";
+		string LibDir = "x64";
+		// We don't ship with arm64 or arm64ec binaries yet, IsSupportedWindowsPlatform() above will return false for arm targets.
+		if (Target.Architecture == UnrealArch.Arm64)
+		{
+			LibDir = "arm64";
+		}
+		else if (Target.Architecture == UnrealArch.Arm64ec)
+		{
+			LibDir = "arm64ec";
+		}
+		return LibDir;
 	}
 
 	public NGX(ReadOnlyTargetRules Target) : base(Target)

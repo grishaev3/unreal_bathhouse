@@ -13,6 +13,8 @@
 #include "StreamlineCorePrivate.h"
 #include "CoreMinimal.h"
 
+#include "StreamlineExtension.h"
+#include "StreamlineFeature.h"
 #include "StreamlineSettings.h"
 #include "StreamlineViewExtension.h"
 #include "StreamlineReflex.h"
@@ -20,8 +22,10 @@
 #include "StreamlineDeepDVC.h"
 
 #include "StreamlineRHI.h"
-#include "sl_helpers.h"
+#include "sl_core_types.h"
+#include "sl_result.h"
 
+#include "Misc/Optional.h"
 #include "Modules/ModuleManager.h"
 #include "Interfaces/IPluginManager.h"
 
@@ -36,25 +40,63 @@
 #define LOCTEXT_NAMESPACE "FStreamlineModule"
 DEFINE_LOG_CATEGORY(LogStreamline);
 
-Streamline::EStreamlineFeatureSupport TranslateStreamlineResult(sl::Result Result)
+
+Streamline::EStreamlineFeatureSupport QueryStreamlineFeatureSupport(FName InFeatureName)
 {
-	switch (Result)
+	if (InFeatureName == FName(TEXT("DLSS-FG")))
 	{
-
-	case sl::Result::eOk:					return Streamline::EStreamlineFeatureSupport::Supported;
-	case sl::Result::eErrorOSDisabledHWS:   return Streamline::EStreamlineFeatureSupport::NotSupportedHardwareSchedulingDisabled;
-	case sl::Result::eErrorOSOutOfDate: return Streamline::EStreamlineFeatureSupport::NotSupportedOperatingSystemOutOfDate;
-	case sl::Result::eErrorDriverOutOfDate: return Streamline::EStreamlineFeatureSupport::NotSupportedDriverOutOfDate;
-	case sl::Result::eErrorNoSupportedAdapterFound: return Streamline::EStreamlineFeatureSupport::NotSupportedIncompatibleHardware;
-	case sl::Result::eErrorAdapterNotSupported: return Streamline::EStreamlineFeatureSupport::NotSupportedIncompatibleHardware;
-	case sl::Result::eErrorMissingOrInvalidAPI: return Streamline::EStreamlineFeatureSupport::NotSupportedIncompatibleRHI;
-
-	default:
-		/* Intentionally falls through*/
-		return Streamline::EStreamlineFeatureSupport::NotSupported;
+		return QueryStreamlineDLSSGSupport();
 	}
+	else if (InFeatureName == FName(TEXT("DeepDVC")))
+	{
+		return QueryStreamlineDeepDVCSupport();
+	}
+	else if (InFeatureName == FName(TEXT("Reflex")))
+	{
+		return QueryStreamlineReflexSupport();
+	}
+
+	// check SL feature extensions
+	const IStreamlineFeature* SLFeature = FStreamlineExtensionModule::Get().GetFeatureImplementation(InFeatureName);
+	if (SLFeature != nullptr)
+	{
+		return SLFeature->QuerySupport();
+	}
+
+	// Name doesn't correspond to a registered Streamline feature
+	return Streamline::EStreamlineFeatureSupport::NotSupportedUnknownFeature;
 }
- 
+
+// used by BP library on startup to fill in a high-level struct with low-level info
+TOptional<sl::Feature> GetStreamlineFeatureID(FName InFeatureName)
+{
+	if (InFeatureName == FName(TEXT("DLSS-FG")))
+	{
+		return sl::kFeatureDLSS_G;
+	}
+	else if (InFeatureName == FName(TEXT("DeepDVC")))
+	{
+		return sl::kFeatureDeepDVC;
+	}
+	else if (InFeatureName == FName(TEXT("Reflex")))
+	{
+		return sl::kFeatureReflex;
+	}
+
+	// check SL feature extensions
+	const TArray<FSLFeatureDesc>& Features = FStreamlineExtensionModule::Get().GetRegisteredFeatures();
+	for (const FSLFeatureDesc Feature : Features)
+	{
+		if (InFeatureName == FName(*Feature.FeatureName))
+		{
+			return Feature.SLFeature;
+		}
+	}
+
+	UE_LOG(LogStreamline, Warning, TEXT("%s: Unknown feature %s"), ANSI_TO_TCHAR(__FUNCTION__), *InFeatureName.ToString());
+	return NullOpt;
+}
+
 void FStreamlineCoreModule::StartupModule()
 {
 	auto CVarInitializePlugin = IConsoleManager::Get().FindConsoleVariable(TEXT("r.Streamline.InitializePlugin"));
@@ -71,6 +113,14 @@ void FStreamlineCoreModule::StartupModule()
 	{
 		// set the view family extension that's gonna call into SL in the postprocessing pass
 		bool bShouldCreateViewExtension = IsStreamlineDLSSGSupported() || IsStreamlineDeepDVCSupported();
+		if (!bShouldCreateViewExtension)
+		{
+			// check dynamic features
+			bShouldCreateViewExtension = FStreamlineExtensionModule::Get().AnyFeature([] (const IStreamlineFeature& Feature)
+			{
+				return Feature.RequiresStreamlineViewExtension();
+			});
+		}
 		if (FParse::Param(FCommandLine::Get(), TEXT("slviewextension")))
 		{
 			bShouldCreateViewExtension = true;

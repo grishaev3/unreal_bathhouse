@@ -11,6 +11,7 @@
 
 #include "NGXRHI.h"
 
+#include "Misc/EngineVersionComparison.h"
 #include "Misc/Paths.h"
 #include "GenericPlatform/GenericPlatformFile.h"
 #include "Interfaces/IPluginManager.h"
@@ -236,6 +237,8 @@ NGXRHI::NGXRHI(const FNGXRHICreateArguments& Arguments)
 			break;
 		}
 	}
+	bool bDLSSSRBinaryWasFound = false;
+	bool bDLSSRRBinaryWasFound = false;
 
 	for (int32 i = 0; i < NGXDLLSearchPaths.Num(); ++i)
 	{
@@ -243,14 +246,25 @@ NGXRHI::NGXRHI(const FNGXRHICreateArguments& Arguments)
 		RemoveDuplicateSlashesFromPath(NGXDLLSearchPaths[i]);
 		FPaths::MakePlatformFilename(NGXDLLSearchPaths[i]);
 
-		// After this we should not touch NGXDLLSearchPaths since that provides the backing store for NGXDLLSearchPathRawStrings	
 		NGXDLLSearchPathRawStrings.Add(*NGXDLLSearchPaths[i]);
 		const bool bHasDLSSSRBinary = IPlatformFile::GetPlatformPhysical().FileExists(*FPaths::Combine(NGXDLLSearchPaths[i], NGX_DLSS_SR_BINARY_NAME));
 		UE_LOG(LogDLSSNGXRHI, Log, TEXT("NVIDIA NGX DLSS-SR binary %s %s in search path %s"), NGX_DLSS_SR_BINARY_NAME, bHasDLSSSRBinary ? TEXT("found") : TEXT("not found"), *NGXDLLSearchPaths[i]);
+		bDLSSSRBinaryWasFound |= bHasDLSSSRBinary;
 
 		const bool bHasDLSSRRBinary = IPlatformFile::GetPlatformPhysical().FileExists(*FPaths::Combine(NGXDLLSearchPaths[i], NGX_DLSS_RR_BINARY_NAME));
 		UE_LOG(LogDLSSNGXRHI, Log, TEXT("NVIDIA NGX DLSS-RR binary %s %s in search path %s"), NGX_DLSS_RR_BINARY_NAME, bHasDLSSRRBinary ? TEXT("found") : TEXT("not found"), *NGXDLLSearchPaths[i]);
+		bDLSSRRBinaryWasFound |= bHasDLSSRRBinary;
 
+	}
+
+	if (!bDLSSRRBinaryWasFound)
+	{
+		UE_LOG(LogDLSSNGXRHI, Warning, TEXT("NVIDIA NGX DLSS-SR binary %s was not found in any known search path."), NGX_DLSS_SR_BINARY_NAME);
+	}
+
+	if (!bDLSSRRBinaryWasFound)
+	{
+		UE_LOG(LogDLSSNGXRHI, Warning, TEXT("NVIDIA NGX DLSS-RR binary %s was not found in any known search path."), NGX_DLSS_RR_BINARY_NAME);
 	}
 
 	// we do this separately here so we can show relative paths in the UI later
@@ -570,7 +584,13 @@ uint32 FRHIDLSSArguments::GetNGXCommonDLSSFeatureFlags() const
 	// DLSS-SR uses hardware depth
 	// DLSS-RR uses linear depth
 	if (DenoiserMode == ENGXDLSSDenoiserMode::Off)
+	{
+#if !UE_VERSION_OLDER_THAN(5,8,0)
+		DLSSFeatureFlags |= NVSDK_NGX_DLSS_Feature_Flags_DepthInverted;
+#else
 		DLSSFeatureFlags |= bool(ERHIZBuffer::IsInverted) ? NVSDK_NGX_DLSS_Feature_Flags_DepthInverted : 0;
+#endif
+	}
 	DLSSFeatureFlags |= NVSDK_NGX_DLSS_Feature_Flags_MVLowRes;
 	DLSSFeatureFlags |= bUseAutoExposure ? NVSDK_NGX_DLSS_Feature_Flags_AutoExposure : 0;
 	DLSSFeatureFlags |= bEnableAlphaUpscaling ? NVSDK_NGX_DLSS_Feature_Flags_AlphaUpscaling : 0;

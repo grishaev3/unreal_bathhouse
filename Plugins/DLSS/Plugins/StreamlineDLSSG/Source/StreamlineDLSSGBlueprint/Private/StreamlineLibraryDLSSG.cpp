@@ -13,19 +13,12 @@
 #include "StreamlineLibrary.h"
 
 #if WITH_STREAMLINE
-#include "StreamlineCore.h"
 #include "StreamlineRHI.h"
-#include "StreamlineReflex.h"
 #include "StreamlineDLSSG.h"
-#include "StreamlineAPI.h"
-
-#include "sl.h"
-#include "sl_dlss_g.h"
 #endif
 
 #include "Modules/ModuleManager.h"
 #include "HAL/IConsoleManager.h"
-#include "Interfaces/IPluginManager.h"
 
 #define LOCTEXT_NAMESPACE "FStreamlineDLSSGBlueprintModule"
 DEFINE_LOG_CATEGORY_STATIC(LogStreamlineDLSSGBlueprint, Log, All);
@@ -48,8 +41,6 @@ if (!TryInitDLSSGLibrary()) \
 #define TRY_INIT_STREAMLINE_DLSSG_LIBRARY_AND_RETURN(ReturnValueWhichCanBeEmpty) 
 
 #endif
-
-EStreamlineFeatureSupport UStreamlineLibraryDLSSG::DLSSGSupport = EStreamlineFeatureSupport::NotSupportedByPlatformAtBuildTime;
 
 #if WITH_STREAMLINE
 
@@ -186,20 +177,12 @@ TArray<EStreamlineDLSSGMode> UStreamlineLibraryDLSSG::GetSupportedDLSSGModes()
 
 bool UStreamlineLibraryDLSSG::IsDLSSGSupported()
 {
-	TRY_INIT_STREAMLINE_DLSSG_LIBRARY_AND_RETURN(false);
-
-#if WITH_STREAMLINE
-	return QueryDLSSGSupport() == EStreamlineFeatureSupport::Supported;
-#else
-	return false;
-#endif
+	return UStreamlineLibrary::IsStreamlineFeatureSupported(TEXT("DLSS-FG"));
 }
 
 EStreamlineFeatureSupport UStreamlineLibraryDLSSG::QueryDLSSGSupport()
 {
-	TRY_INIT_STREAMLINE_DLSSG_LIBRARY_AND_RETURN(EStreamlineFeatureSupport::NotSupported);
-
-	return DLSSGSupport;
+	return UStreamlineLibrary::QueryStreamlineFeatureSupport(TEXT("DLSS-FG"));
 }
 
 #if WITH_STREAMLINE
@@ -382,7 +365,6 @@ bool UStreamlineLibraryDLSSG::TryInitDLSSGLibrary()
 {
 	if (bDLSSGLibraryInitialized)
 	{
-		// TODO
 		return true;
 	}
 
@@ -394,32 +376,6 @@ bool UStreamlineLibraryDLSSG::TryInitDLSSGLibrary()
 	}
 #endif
 
-	
-
-	if (IsStreamlineSupported())
-	{
-		if (GetPlatformStreamlineRHI()->IsDLSSGSupportedByRHI())
-		{
-
-			DLSSGSupport = ToUStreamlineFeatureSupport(QueryStreamlineDLSSGSupport());
-		}
-		else
-		{
-			DLSSGSupport = EStreamlineFeatureSupport::NotSupportedByRHI;
-		}
-	}
-	else
-	{
-		if (GetPlatformStreamlineSupport() == EStreamlineSupport::NotSupportedIncompatibleRHI)
-		{
-			DLSSGSupport = EStreamlineFeatureSupport::NotSupportedByRHI;
-		}
-		else
-		{
-			DLSSGSupport = EStreamlineFeatureSupport::NotSupported;
-		}
-	}
-
 	bDLSSGLibraryInitialized = true;
 
 	return true;
@@ -429,13 +385,9 @@ bool UStreamlineLibraryDLSSG::TryInitDLSSGLibrary()
 void UStreamlineLibraryDLSSG::Startup()
 {
 #if WITH_STREAMLINE
-	// This initialization will likely not succeed unless this module has been moved to PostEngineInit, and that's ok
 	UStreamlineLibraryDLSSG::TryInitDLSSGLibrary();
-
-	UStreamlineLibrary::RegisterFeatureSupport(EStreamlineFeature::DLSSG, UStreamlineLibraryDLSSG::QueryDLSSGSupport());
 #else
 	UE_LOG(LogStreamlineDLSSGBlueprint, Log, TEXT("Streamline is not supported on this platform at build time. The Streamline Blueprint library however is supported and stubbed out to ignore any calls to enable DLSS-G and will always return UStreamlineFeatureSupport::NotSupportedByPlatformAtBuildTime, regardless of the underlying hardware. This can be used to e.g. to turn off DLSS-G related UI elements."));
-	UStreamlineLibraryDLSSG::DLSSGSupport = EStreamlineFeatureSupport::NotSupportedByPlatformAtBuildTime;
 #endif
 }
 

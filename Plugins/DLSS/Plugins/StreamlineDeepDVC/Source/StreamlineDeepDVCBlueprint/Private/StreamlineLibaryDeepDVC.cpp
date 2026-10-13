@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2022 - 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+* Copyright (c) 2022 - 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 *
 * NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
 * property and proprietary rights in and to this material, related
@@ -12,18 +12,8 @@
 #include "StreamlineLibraryDeepDVC.h"
 #include "StreamlineLibrary.h"
 
-#if WITH_STREAMLINE
-#include "StreamlineCore.h"
-#include "StreamlineRHI.h"
-#include "StreamlineDeepDVC.h"
-#include "StreamlineAPI.h"
-#include "sl.h"
-#include "sl_deepdvc.h"
-#endif
-
 #include "Modules/ModuleManager.h"
 #include "HAL/IConsoleManager.h"
-#include "Interfaces/IPluginManager.h"
 
 #ifdef __INTELLISENSE__
 #define WITH_STREAMLINE 1
@@ -47,7 +37,6 @@ if (!TryInitDeepDVCLibrary()) \
 
 #endif
 
-EStreamlineFeatureSupport UStreamlineLibraryDeepDVC::DeepDVCSupport = EStreamlineFeatureSupport::NotSupportedByPlatformAtBuildTime;
 #if WITH_STREAMLINE
 
 bool UStreamlineLibraryDeepDVC::bDeepDVCLibraryInitialized = false;
@@ -124,20 +113,12 @@ TArray<EStreamlineDeepDVCMode> UStreamlineLibraryDeepDVC::GetSupportedDeepDVCMod
 
 bool UStreamlineLibraryDeepDVC::IsDeepDVCSupported()
 {
-	TRY_INIT_STREAMLINE_DEEPDVC_LIBRARY_AND_RETURN(false);
-
-#if WITH_STREAMLINE
-	return QueryDeepDVCSupport() == EStreamlineFeatureSupport::Supported;
-#else
-	return false;
-#endif
+	return UStreamlineLibrary::IsStreamlineFeatureSupported(TEXT("DeepDVC"));
 }
 
 EStreamlineFeatureSupport UStreamlineLibraryDeepDVC::QueryDeepDVCSupport()
 {
-	TRY_INIT_STREAMLINE_DEEPDVC_LIBRARY_AND_RETURN(EStreamlineFeatureSupport::NotSupported);
-
-	return DeepDVCSupport;
+	return UStreamlineLibrary::QueryStreamlineFeatureSupport(TEXT("DeepDVC"));
 }
 
 #if WITH_STREAMLINE
@@ -296,43 +277,15 @@ bool UStreamlineLibraryDeepDVC::TryInitDeepDVCLibrary()
 {
 	if (bDeepDVCLibraryInitialized)
 	{
-		// TODO
 		return true;
 	}
 
-	// Register this before we bail out so we can show error messages
 #if !UE_BUILD_SHIPPING
 	if (!DeepDVCOnScreenMessagesDelegateHandle.IsValid())
 	{
 		DeepDVCOnScreenMessagesDelegateHandle = FCoreDelegates::OnGetOnScreenMessages.AddStatic(&GetDeepDVCOnScreenMessages);
 	}
 #endif
-
-	
-
-	if (IsStreamlineSupported())
-	{
-		if (GetPlatformStreamlineRHI()->IsDeepDVCSupportedByRHI())
-		{
-
-			DeepDVCSupport = ToUStreamlineFeatureSupport(QueryStreamlineDeepDVCSupport());
-		}
-		else
-		{
-			DeepDVCSupport = EStreamlineFeatureSupport::NotSupportedByRHI;
-		}
-	}
-	else
-	{
-		if (GetPlatformStreamlineSupport() == EStreamlineSupport::NotSupportedIncompatibleRHI)
-		{
-			DeepDVCSupport = EStreamlineFeatureSupport::NotSupportedByRHI;
-		}
-		else
-		{
-			DeepDVCSupport = EStreamlineFeatureSupport::NotSupported;
-		}
-	}
 
 	bDeepDVCLibraryInitialized = true;
 
@@ -344,12 +297,9 @@ bool UStreamlineLibraryDeepDVC::TryInitDeepDVCLibrary()
 void UStreamlineLibraryDeepDVC::Startup()
 {
 #if WITH_STREAMLINE
-	// This initialization will likely not succeed unless this module has been moved to PostEngineInit, and that's ok
 	UStreamlineLibraryDeepDVC::TryInitDeepDVCLibrary();
-	UStreamlineLibrary::RegisterFeatureSupport(EStreamlineFeature::DeepDVC, UStreamlineLibraryDeepDVC::QueryDeepDVCSupport());
 #else
 	UE_LOG(LogStreamlineDeepDVCBlueprint, Log, TEXT("Streamline is not supported on this platform at build time. The Streamline Blueprint library however is supported and stubbed out to ignore any calls to enable DeepDVC and will always return UStreamlineFeatureSupport::NotSupportedByPlatformAtBuildTime, regardless of the underlying hardware. This can be used to e.g. to turn off related UI elements."));
-	UStreamlineLibraryDeepDVC::DeepDVCSupport = EStreamlineFeatureSupport::NotSupportedByPlatformAtBuildTime;
 #endif
 }
 void UStreamlineLibraryDeepDVC::Shutdown()

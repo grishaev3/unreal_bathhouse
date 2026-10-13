@@ -1,6 +1,6 @@
 {
 	"FileVersion": 3,
-	"EngineAssociation": "5.7",
+	"EngineAssociation": "{4792D392-4C6B-3625-43E7-B697A1CEEBFD}",
 	"Category": "",
 	"Description": "",
 	"Modules": [
@@ -32,10 +32,21 @@
 		{
 			"Name": "Volumetrics",
 			"Enabled": true
+		},
+		{
+			"Name": "ModelContextProtocol",
+			"Enabled": true,
+			"TargetAllowList": [
+				"Editor"
+			]
+		},
+		{
+			"Name": "EditorToolset",
+			"Enabled": true,
+			"TargetAllowList": [
+				"Editor"
+			]
 		}
-	],
-	"AdditionalPluginDirectories": [
-		"Plugins"
 	],
 	"TargetPlatforms": [
 		"Windows"

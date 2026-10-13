@@ -38,7 +38,6 @@ public class StreamlineShaders : ModuleRules
 				"Core",
 				"RenderCore",
 				"Renderer",
-					
 			}
 			);
 			
@@ -46,6 +45,7 @@ public class StreamlineShaders : ModuleRules
 		PrivateDependencyModuleNames.AddRange(
 			new string[]
 			{
+					"CoreUObject",
 					"Engine",
 					"RHI",
 					"Projects"

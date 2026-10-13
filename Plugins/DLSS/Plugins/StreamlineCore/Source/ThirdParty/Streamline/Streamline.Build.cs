@@ -23,18 +23,31 @@ public class Streamline : ModuleRules
 
 	protected virtual bool IsSupportedWindowsPlatform(ReadOnlyTargetRules Target)
 	{
-		return Target.Platform.IsInGroup(UnrealPlatformGroup.Windows);
+		return Target.Platform.IsInGroup(UnrealPlatformGroup.Windows) && (Target.Architecture == UnrealArch.X64);
 	}
 
 	protected virtual string GetPlatformDir(ReadOnlyTargetRules Target)
 	{
-		return Target.Platform.ToString();
+		string PlatformDir = Target.Platform.ToString();
+		// We don't ship with arm64 or arm64ec binaries yet, IsSupportedWindowsPlatform() above will return false for arm targets.
+		if (Target.Architecture == UnrealArch.Arm64)
+		{
+			PlatformDir = "WinArm64";
+		}
+		else if (Target.Architecture == UnrealArch.Arm64ec)
+		{
+			PlatformDir = "WinArm64ec";
+		}
+		return PlatformDir;
 	}
 	public Streamline(ReadOnlyTargetRules Target) : base(Target)
 	{
 		Type = ModuleType.External;
 
-		if (IsSupportedWindowsPlatform(Target))
+		bool bPlatformSupportsStreamline = IsSupportedWindowsPlatform(Target);
+		PublicDefinitions.Add("WITH_STREAMLINE=" + (bPlatformSupportsStreamline ? '1' : '0'));
+
+		if (bPlatformSupportsStreamline)
 		{
 			string StreamlinePath = ModuleDirectory + "/";
 			string StreamlineIncludePath = StreamlinePath + "include/";

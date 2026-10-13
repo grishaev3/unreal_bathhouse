@@ -17,7 +17,7 @@
 class FSceneViewFamily;
 
 UENUM(BlueprintType)
-enum class EMoviePipelineDLSSQuality : uint8
+enum EMoviePipelineDLSSQuality : int
 {
 	EMoviePipelineDLSSQuality_DLAA					UMETA(DisplayName = "DLAA"),
 	EMoviePipelineDLSSQuality_UltraQuality			UMETA(DisplayName = "Ultra Quality"),
@@ -49,5 +49,5 @@ public:
 	
 	/** DLSS/DLAA quality setting */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DLSS/DLAA settings", DisplayName = "DLSS Quality")
-	EMoviePipelineDLSSQuality DLSSQuality;
+	TEnumAsByte<EMoviePipelineDLSSQuality> DLSSQuality;
 };

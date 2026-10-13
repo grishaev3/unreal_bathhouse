@@ -14,8 +14,6 @@
 #include "UObject/Object.h"
 #include "UObject/ObjectMacros.h"
 
-#define UE_API STREAMLINERHI_API
-
 #include "StreamlineSettings.generated.h"
 
 UENUM()
@@ -127,4 +125,3 @@ public:
 	}
 };
 
-#undef UE_API

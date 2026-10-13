@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2022 - 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+* Copyright (c) 2022 - 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 *
 * NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
 * property and proprietary rights in and to this material, related
@@ -36,24 +36,8 @@ enum class EStreamlineReflexMode : uint8
 	Boost = 3 UMETA(DisplayName = "Boost")
 };
 
-// TODO, eventually also use on the other BP libraries
-class FStreamlineLibraryImplementationBase
-{
-	protected:
-
-	static EStreamlineFeatureSupport FeatureSupport;
-
-
-#if WITH_STREAMLINE
-	static bool bIsLibraryInitialized;
-	static bool TryInitLibrary();
-#endif
-};
-
-
 UCLASS(MinimalAPI)
-class UStreamlineLibraryReflex : public UBlueprintFunctionLibrary, 
-	public FStreamlineLibraryImplementationBase
+class UStreamlineLibraryReflex : public UBlueprintFunctionLibrary
 {
 public:
 	GENERATED_BODY()
@@ -88,10 +72,6 @@ public:
 	static UE_API float GetGameLatencyInMs();
 	UFUNCTION(BlueprintPure, Category = "Streamline|Reflex", meta = (DisplayName = "Get Reflex Render Latency (ms)"))
 	static UE_API float GetRenderLatencyInMs();
-
-
-	static void Startup();
-	static void Shutdown();
 };
 
 class FStreamlineLibraryReflexBlueprintModule final : public IModuleInterface

@@ -13,7 +13,7 @@
 
 #include "nvsdk_ngx.h"
 #include "nvsdk_ngx_helpers.h"
-#include "nvsdk_ngx_helpers_dlssd.h"
+#include "nvsdk_ngx_helpers_dlssd_d3d.h"
 
 #include "ID3D12DynamicRHI.h"
 #include "GenericPlatform/GenericPlatformFile.h"

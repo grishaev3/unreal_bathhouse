@@ -9,15 +9,19 @@
 * its affiliates is strictly prohibited.
 */
 #include "StreamlineLibrary.h"
+
+#include "StreamlineExtension.h"
 #include "StreamlineLibraryPrivate.h"
 
+#include "Algo/Accumulate.h"
 #include "HAL/IConsoleManager.h"
+#include "Misc/EngineVersionComparison.h"
+#include "Misc/Optional.h"
 
 #if WITH_STREAMLINE
-
+#include "StreamlineAPI.h"
 #include "StreamlineCore.h"
 #include "StreamlineRHI.h"
-#include "StreamlineAPI.h"
 
 #pragma warning(push) //TODO: Remove after sl fixes this warning on their end
 #pragma warning(disable : 4471)
@@ -31,14 +35,13 @@
 #define LOCTEXT_NAMESPACE "FStreamlineBlueprintModule"
 DEFINE_LOG_CATEGORY(LogStreamlineBlueprint);
 
-TStaticArray<FStreamlineFeatureRequirements, static_cast<uint8>(EStreamlineFeature::Count)> UStreamlineLibrary::Features;
+TMap<EStreamlineFeature, FStreamlineFeatureRequirements> UStreamlineLibrary::FeatureRequirements{};
+TMap<FName, EStreamlineFeature> UStreamlineLibrary::StreamlineFeatureFromName{};
 bool UStreamlineLibrary::bStreamlineLibraryInitialized = false;
 
-
-#if WITH_STREAMLINE
 EStreamlineFeatureSupport ToUStreamlineFeatureSupport(Streamline::EStreamlineFeatureSupport Support)
 {
-	static_assert(int32(Streamline::EStreamlineFeatureSupport::NumValues) == 7, "dear NVIDIA plugin developer, please update this code to handle the new enum values ");
+	static_assert(int32(Streamline::EStreamlineFeatureSupport::NumValues) == 9, "dear NVIDIA plugin developer, please update this code to handle the new enum values ");
 
 	switch (Support)
 	{
@@ -53,49 +56,10 @@ EStreamlineFeatureSupport ToUStreamlineFeatureSupport(Streamline::EStreamlineFea
 		case Streamline::EStreamlineFeatureSupport::NotSupportedOperatingSystemOutOfDate: return EStreamlineFeatureSupport::NotSupportedOperatingSystemOutOfDate;
 		case Streamline::EStreamlineFeatureSupport::NotSupportedHardwareSchedulingDisabled: return EStreamlineFeatureSupport::NotSupportedHardewareSchedulingDisabled;
 		case Streamline::EStreamlineFeatureSupport::NotSupportedIncompatibleRHI: return EStreamlineFeatureSupport::NotSupportedByRHI;
+		case Streamline::EStreamlineFeatureSupport::NotSupportedUnknownFeature: return EStreamlineFeatureSupport::NotSupportedUnknownFeature;
+		case Streamline::EStreamlineFeatureSupport::NotSupportedByPlatformAtBuildTime: return EStreamlineFeatureSupport::NotSupportedByPlatformAtBuildTime;
 	}
 }
-
-namespace
-{
-
-	FStreamlineVersion FromStreamlineVersion(const sl::Version& SLVersion)
-	{
-		return FStreamlineVersion{ static_cast<int32>(SLVersion.major), static_cast<int32>(SLVersion.minor), static_cast<int32>(SLVersion.build) };
-	}
-
-	uint32 FromUStreamlineFeature(EStreamlineFeature InFeature)
-	{
-		static_assert(int32(EStreamlineFeature::Count) == 3, "dear NVIDIA plugin developer, please update this code to handle the new enum values ");
-
-		switch (InFeature)
-		{
-		case EStreamlineFeature::DLSSG: return sl::kFeatureDLSS_G;
-		case EStreamlineFeature::Reflex: return sl::kFeatureReflex;
-		case EStreamlineFeature::DeepDVC: return sl::kFeatureDeepDVC;
-		default:
-
-			return 0;
-		}
-	}
-}
-#endif
-
-int32 UStreamlineLibrary::ValidateAndConvertToIndex(EStreamlineFeature Feature)
-{
-	const int32 FeatureInt = static_cast<int32>(Feature);
-
-	if (FeatureInt < UStreamlineLibrary::Features.Num())
-	{
-		return FeatureInt;
-	}
-
-	else
-	{
-		return 0;
-	}
-}
-
 
 void UStreamlineLibrary::BreakStreamlineFeatureRequirements(EStreamlineFeatureRequirementsFlags Requirements, bool& D3D11Supported, bool& D3D12Supported, bool& VulkanSupported, bool& VSyncOffRequired, bool& HardwareSchedulingRequired)
 {
@@ -111,9 +75,15 @@ void UStreamlineLibrary::BreakStreamlineFeatureRequirements(EStreamlineFeatureRe
 
 FStreamlineFeatureRequirements UStreamlineLibrary::GetStreamlineFeatureInformation(EStreamlineFeature Feature)
 {
+	TRY_INIT_STREAMLINE_LIBRARY_AND_RETURN(FStreamlineFeatureRequirements{})
+
 	if (ValidateEnumValue(Feature, __FUNCTION__))
 	{
-		return Features[ValidateAndConvertToIndex(Feature)];
+		FStreamlineFeatureRequirements* Requirements = FeatureRequirements.Find(Feature);
+		if (Requirements != nullptr)
+		{
+			return *Requirements;
+		}
 	}
 
 	return FStreamlineFeatureRequirements();
@@ -134,98 +104,257 @@ bool UStreamlineLibrary::IsStreamlineFeatureSupported(EStreamlineFeature Feature
 
 EStreamlineFeatureSupport UStreamlineLibrary::QueryStreamlineFeatureSupport(EStreamlineFeature Feature)
 {
+#if WITH_STREAMLINE
 	TRY_INIT_STREAMLINE_LIBRARY_AND_RETURN(EStreamlineFeatureSupport::NotSupported)
 
 	if (ValidateEnumValue(Feature, __FUNCTION__))
 	{
-		return Features[ValidateAndConvertToIndex(Feature)].Support;
+		FStreamlineFeatureRequirements* Requirements = FeatureRequirements.Find(Feature);
+		if (Requirements != nullptr)
+		{
+			return Requirements->Support;
+		}
 	}
 
-	return EStreamlineFeatureSupport::NotSupported;
+	return EStreamlineFeatureSupport::NotSupportedUnknownFeature;
+#else
+	return EStreamlineFeatureSupport::NotSupportedByPlatformAtBuildTime;
+#endif
+}
+
+EStreamlineFeatureSupport UStreamlineLibrary::QueryStreamlineFeatureSupport(FName FeatureName)
+{
+#if WITH_STREAMLINE
+	TRY_INIT_STREAMLINE_LIBRARY_AND_RETURN(EStreamlineFeatureSupport::NotSupported)
+
+	EStreamlineFeature* Feature = StreamlineFeatureFromName.Find(FeatureName);
+	return Feature ? QueryStreamlineFeatureSupport(*Feature) : EStreamlineFeatureSupport::NotSupportedUnknownFeature;
+#else
+	return EStreamlineFeatureSupport::NotSupportedByPlatformAtBuildTime;
+#endif
 }
 
 void UStreamlineLibrary::Startup()
 {
-#if WITH_STREAMLINE
-	// This initialization will likely not succeed unless this module has been moved to PostEngineInit, and that's ok
+	// This initialization will likely not succeed if this module has been moved from PostEngineInit. It still gets called again when any BP functions are accessed.
 	TryInitStreamlineLibrary();
-#else
+#if !WITH_STREAMLINE
 	UE_LOG(LogStreamlineBlueprint, Log, TEXT("Streamline is not supported on this platform at build time. The Streamline Blueprint library however is supported and stubbed out to ignore any calls to enable Streamline features and will always return UStreamlineFeatureSupport::NotSupportedByPlatformAtBuildTime, regardless of the underlying hardware. This can be used to e.g. to turn off related UI elements."));
 #endif
 }
 void UStreamlineLibrary::Shutdown()
 {
-#if WITH_STREAMLINE && !UE_BUILD_SHIPPING
-	
-#endif
 }
-
-void UStreamlineLibrary::RegisterFeatureSupport(EStreamlineFeature InFeature, EStreamlineFeatureSupport InSupport)
-{
-#if WITH_STREAMLINE
-	sl::Feature SLFeature = FromUStreamlineFeature(InFeature);
-	FStreamlineFeatureRequirements& Requirements = Features[ValidateAndConvertToIndex(InFeature)];
-	if (IsStreamlineSupported())
-	{
-
-		sl::FeatureRequirements SLRequirements;
-		SLgetFeatureRequirements(SLFeature, SLRequirements);
-
-		Requirements.RequiredDriverVersion = FromStreamlineVersion(SLRequirements.driverVersionRequired);
-		Requirements.DetectedDriverVersion = FromStreamlineVersion(SLRequirements.driverVersionDetected);
-		Requirements.RequiredOperatingSystemVersion = FromStreamlineVersion(SLRequirements.osVersionRequired);
-		Requirements.DetectedOperatingSystemVersion = FromStreamlineVersion(SLRequirements.osVersionDetected);
-
-		// static_assert and static_cast are best friends
-#define UE_SL_ENUM_CHECK(A,B) static_assert(uint32(sl::FeatureRequirementFlags::A) == uint32(EStreamlineFeatureRequirementsFlags::B), "sl::FeatureRequirementFlags vs UStreamlineFeatureRequirementsFlags enum mismatch");
-		UE_SL_ENUM_CHECK(eD3D11Supported, D3D11Supported)
-			UE_SL_ENUM_CHECK(eD3D12Supported, D3D12Supported)
-			UE_SL_ENUM_CHECK(eVulkanSupported, VulkanSupported)
-			UE_SL_ENUM_CHECK(eVSyncOffRequired, VSyncOffRequired)
-			UE_SL_ENUM_CHECK(eHardwareSchedulingRequired, HardwareSchedulingRequired)
-#undef UE_SL_ENUM_CHECK
-
-		// strip the API support bits for those that are not implemented, but keep the other flags intact
-		const sl::FeatureRequirementFlags ImplementedAPIFlags = PlatformGetAllImplementedStreamlineRHIs();
-		const sl::FeatureRequirementFlags AllAPIFlags = sl::FeatureRequirementFlags::eD3D11Supported | sl::FeatureRequirementFlags::eD3D12Supported | sl::FeatureRequirementFlags::eVulkanSupported;
-		const sl::FeatureRequirementFlags SLRequirementFlags = sl::FeatureRequirementFlags(SLBitwiseAnd(SLRequirements.flags, ImplementedAPIFlags) | SLBitwiseAnd(SLRequirements.flags, ~AllAPIFlags));
-
-		Requirements.Requirements = static_cast<EStreamlineFeatureRequirementsFlags>(SLRequirementFlags);
-		Requirements.Support = InSupport;
-
-	}
-#endif
-
-}
-
-#if WITH_STREAMLINE
 
 // Delayed initialization, which allows this module to be available early so blueprints can be loaded before DLSS is available in PostEngineInit
 bool UStreamlineLibrary::TryInitStreamlineLibrary()
 {
 	if (bStreamlineLibraryInitialized)
 	{
-		// TODO
 		return true;
 	}
 
-//	// Register this before we bail out so we can show error messages
-//#if !UE_BUILD_SHIPPING
-//	if (!DLSSOnScreenMessagesDelegateHandle.IsValid())
-//	{
-//		DLSSOnScreenMessagesDelegateHandle = FCoreDelegates::OnGetOnScreenMessages.AddStatic(&GetDLSSOnScreenMessages);
-//	}
-//#endif
+#if WITH_STREAMLINE
+	// Before UE 5.6, PostSplashScreen modules like StreamlineRHI don't get loaded at all if there's no splash screen
+	// (for example when running a commandlet).
+	//
+	// Normally we'd allow SL features to be registered up until Streamline itself is initialized by StreamlineRHI, then
+	// we'd prevent new SL features from being registered after that. But if StreamlineRHI never loads, Streamline never
+	// gets initialized and nothing prevents a rogue SL feature from registering itself at any point. So how can we
+	// know when it's safe to query the registered SL features and initialize the enum values?
+	//
+	// Just not updating the enum values at all is not an option because that would break any content that uses them
+	// when running a cooking commandlet.
+	//
+	// So in 5.5 and earlier we call CloseRegistration() here ourselves to prevent any new things from getting
+	// registered after this module, and we proceed to update the dynamic enums. That should be safe as long as
+	// customers don't change the module loading phases in such a way that this module gets loaded before all dynamic
+	// Streamline features are loaded.
+	//
+	// Starting with UE 5.6 PostSplashScreen modules are loaded unconditionally so none of this is an issue there. We
+	// just verify that StreamlineRHI has been loaded, which should always be the case if loading phases haven't
+	// been changed.
+	if (!FModuleManager::Get().IsModuleLoaded(TEXT("StreamlineRHI")))
+	{
+#if !UE_VERSION_OLDER_THAN(5,6,0)
+		// too early, SL not initialized yet
+		return false;
+#else
+		if (!IsRunningDedicatedServer() && !IsRunningCommandlet())
+		{
+			UE_LOG(LogStreamlineBlueprint, Warning, TEXT("TryInitStreamlineLibrary called before Streamline initialized. This is unexpected. Some dynamic Streamline features may not be properly supported"));
+		}
+		FStreamlineExtensionModule::Get().CloseRegistration();
+#endif
+	}
+#else
+	FStreamlineExtensionModule::Get().CloseRegistration();
+#endif	// WITH_STREAMLINE
 
+	// FG is a special case, for historic reasons the feature name doesn't match the enum name
+	TMap<EStreamlineFeature, FName> NameFromStreamlineFeature{ {EStreamlineFeature::DLSSG, TEXT("DLSS-FG")} };
 
-	
+	// Find how many SL features are registered
+	int32 NumFeatures = 0;
+	UEnum* Enum = StaticEnum<EStreamlineFeature>();
+	const TArray<FSLFeatureDesc>& DynamicFeatures = FStreamlineExtensionModule::Get().GetRegisteredFeatures();
+	if (DynamicFeatures.IsEmpty())
+	{
+		// The last entry is the auto-generated hidden "MAX" entry so we skip it.
+		NumFeatures = Enum->NumEnums() - 1;
+		for (int32 Idx = 0; Idx < NumFeatures; ++Idx)
+		{
+			const EStreamlineFeature Feature = static_cast<EStreamlineFeature>(Idx);
+			if (!NameFromStreamlineFeature.Contains(Feature))
+			{
+				FName EnumName = *Enum->GetNameStringByIndex(Idx);
+				NameFromStreamlineFeature.Add(Feature, EnumName);
+			}
+		}
+	}
+	else
+	{
+		// Add enum values for any dynamically registered features
 
+		// strip non-alphanumerics from feature name to get enum name
+		// Would turn a fictional "DLSS-XP" feature into "DLSSXP"
+		auto GetEnumNameFromFeatureName = [](FString InFeatureName) -> FString
+		{
+			return Algo::Accumulate(InFeatureName, FString{}, [](FString Value, TCHAR Char)
+				{ return FChar::IsAlnum(Char) ? Value + Char : Value; });
+		};
+
+		// First copy base names
+		TArray<TPair<FName, int64>> NewNames;
+		int32 Idx = 0;
+		// The last entry is the auto-generated hidden "MAX" entry so we skip copying it.
+		// Don't worry, a new hidden "MAX" entry will be auto-generated by the SetEnums() call below.
+		int32 NumNames = Enum->NumEnums() - 1;
+		while (NumNames-- > 0)
+		{
+			FName EnumName = *Enum->GetNameStringByIndex(Idx);
+			const EStreamlineFeature Feature = static_cast<EStreamlineFeature>(Idx);
+			if (!NameFromStreamlineFeature.Contains(Feature))
+			{
+				NameFromStreamlineFeature.Add(Feature, EnumName);
+			}
+			NewNames.Emplace(EnumName, Idx++);
+		}
+
+		// Next add new enum names to the end
+		for (const FSLFeatureDesc& DynamicFeature : DynamicFeatures)
+		{
+			FString EnumString = GetEnumNameFromFeatureName(DynamicFeature.FeatureName);
+			if (INDEX_NONE == Enum->GetIndexByNameString(EnumString))
+			{
+				NameFromStreamlineFeature.Add(static_cast<EStreamlineFeature>(Idx), *DynamicFeature.FeatureName);
+				NewNames.Emplace(*EnumString, Idx++);
+			}
+		}
+		NumFeatures = Idx;
+
+		// Write new enum list
+#if !UE_VERSION_OLDER_THAN(5,8,0)
+		Enum->SetEnums(NewNames, UEnum::ECppForm::Regular, UEnum::EUnderlyingType::uint8, EEnumFlags::None, UEnum::EAddMaxKeyIfMissing::Yes);
+#else
+		Enum->SetEnums(NewNames, UEnum::ECppForm::Regular);
+#endif
+
+#if WITH_METADATA
+		// In editor we make the new enum names look prettier.
+		// For example an enum value of "DLSS-FG" would get mangled to "DLSS- FG" as the display name by default. And "DLSSFG" isn't pretty either.
+		// So use the feature name as a display name since that's likely to look nicer.
+		for (const FSLFeatureDesc& DynamicFeature : DynamicFeatures)
+		{
+			FString EnumString = GetEnumNameFromFeatureName(DynamicFeature.FeatureName);
+			int32 FeatureIdx = Enum->GetIndexByNameString(EnumString);
+			if (ensure(FeatureIdx != INDEX_NONE))
+			{
+				Enum->SetMetaData(TEXT("DisplayName"), *DynamicFeature.FeatureName, FeatureIdx);
+			}
+		}
+#endif
+	}
+
+	// Add feature requirements
+	FeatureRequirements.Reserve(NumFeatures);
+#if WITH_STREAMLINE
+	if (IsStreamlineSupported())
+	{
+		// static_assert and static_cast are best friends
+#define UE_SL_ENUM_CHECK(A,B) static_assert(uint32(sl::FeatureRequirementFlags::A) == uint32(EStreamlineFeatureRequirementsFlags::B), "sl::FeatureRequirementFlags vs UStreamlineFeatureRequirementsFlags enum mismatch")
+		UE_SL_ENUM_CHECK(eD3D11Supported, D3D11Supported);
+		UE_SL_ENUM_CHECK(eD3D12Supported, D3D12Supported);
+		UE_SL_ENUM_CHECK(eVulkanSupported, VulkanSupported);
+		UE_SL_ENUM_CHECK(eVSyncOffRequired, VSyncOffRequired);
+		UE_SL_ENUM_CHECK(eHardwareSchedulingRequired, HardwareSchedulingRequired);
+#undef UE_SL_ENUM_CHECK
+
+		for (int32 Idx = 0; Idx < NumFeatures; ++Idx)
+		{
+			const EStreamlineFeature Feature = static_cast<EStreamlineFeature>(Idx);
+			const FName FeatureName = NameFromStreamlineFeature.FindRef(Feature, NAME_None);
+			TOptional<sl::Feature> MaybeFeatureID = GetStreamlineFeatureID(FeatureName);
+			if (!ensure(MaybeFeatureID.IsSet()))
+			{
+				FStreamlineFeatureRequirements Requirements;
+				Requirements.Support = EStreamlineFeatureSupport::NotSupported;
+				FeatureRequirements.Add(Feature, Requirements);
+				continue;
+			}
+			sl::Feature FeatureID = MaybeFeatureID.GetValue();
+			StreamlineFeatureFromName.Add(FeatureName, Feature);
+
+			FStreamlineFeatureRequirements Requirements;
+			Requirements.Support = ToUStreamlineFeatureSupport(::QueryStreamlineFeatureSupport(FeatureName));
+
+			sl::FeatureRequirements SLRequirements;
+			SLgetFeatureRequirements(FeatureID, SLRequirements);
+
+			auto FromStreamlineVersion = [](const sl::Version& SLVersion) -> FStreamlineVersion
+			{
+				return FStreamlineVersion{ static_cast<int32>(SLVersion.major), static_cast<int32>(SLVersion.minor), static_cast<int32>(SLVersion.build) };
+			};
+			Requirements.RequiredDriverVersion = FromStreamlineVersion(SLRequirements.driverVersionRequired);
+			Requirements.DetectedDriverVersion = FromStreamlineVersion(SLRequirements.driverVersionDetected);
+			Requirements.RequiredOperatingSystemVersion = FromStreamlineVersion(SLRequirements.osVersionRequired);
+			Requirements.DetectedOperatingSystemVersion = FromStreamlineVersion(SLRequirements.osVersionDetected);
+
+			// strip the API support bits for those that are not implemented, but keep the other flags intact
+			const sl::FeatureRequirementFlags ImplementedAPIFlags = PlatformGetAllImplementedStreamlineRHIs();
+			const sl::FeatureRequirementFlags AllAPIFlags = sl::FeatureRequirementFlags::eD3D11Supported | sl::FeatureRequirementFlags::eD3D12Supported | sl::FeatureRequirementFlags::eVulkanSupported;
+			const sl::FeatureRequirementFlags SLRequirementFlags = sl::FeatureRequirementFlags(SLBitwiseAnd(SLRequirements.flags, ImplementedAPIFlags) | SLBitwiseAnd(SLRequirements.flags, ~AllAPIFlags));
+
+			Requirements.Requirements = static_cast<EStreamlineFeatureRequirementsFlags>(SLRequirementFlags);
+			FeatureRequirements.Add(Feature, Requirements);
+		}
+	}
+	else
+#endif	// WITH_STREAMLINE
+	{
+		// Streamline isn't supported, so no features are supported
+		FStreamlineFeatureRequirements Requirements;
+#if WITH_STREAMLINE
+		Requirements.Support = (GetPlatformStreamlineSupport() == EStreamlineSupport::NotSupportedIncompatibleRHI) ?
+			EStreamlineFeatureSupport::NotSupportedByRHI : EStreamlineFeatureSupport::NotSupported;
+#else
+		Requirements.Support = EStreamlineFeatureSupport::NotSupportedByPlatformAtBuildTime;
+#endif
+		for (int32 Idx = 0; Idx < NumFeatures; ++Idx)
+		{
+			const EStreamlineFeature Feature = static_cast<EStreamlineFeature>(Idx);
+			if (NameFromStreamlineFeature.Contains(Feature))
+			{
+				StreamlineFeatureFromName.Add(NameFromStreamlineFeature.FindChecked(Feature), Feature);
+			}
+			FeatureRequirements.Add(Feature, Requirements);
+		}
+	}
 
 	bStreamlineLibraryInitialized = true;
 
 	return true;
 }
-#endif // WITH_STREAMLINE
 
 void FStreamlineBlueprintModule::StartupModule()
 {
@@ -255,5 +384,4 @@ void FStreamlineBlueprintModule::ShutdownModule()
 #undef LOCTEXT_NAMESPACE
 
 IMPLEMENT_MODULE(FStreamlineBlueprintModule, StreamlineBlueprint)
-
 

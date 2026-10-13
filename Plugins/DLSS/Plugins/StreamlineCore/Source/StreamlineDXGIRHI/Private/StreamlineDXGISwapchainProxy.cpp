@@ -19,7 +19,7 @@
 DEFINE_LOG_CATEGORY(LogStreamlineDXGIRHI);
 
 
-FStreamlineDXGISwapChainProxy::FStreamlineDXGISwapChainProxy(IDXGISwapChain* InOriginal, const FStreamlineRHI* InStreamlineRHI, bool bInIsStreamlineProxy)
+FStreamlineDXGISwapChainProxy::FStreamlineDXGISwapChainProxy(IDXGISwapChain* InOriginal, FStreamlineRHI* InStreamlineRHI, bool bInIsStreamlineProxy)
 	: WrappedSwapchain(InOriginal)
 	, RefCount(1)
 	, StreamlineRHI(InStreamlineRHI)
@@ -114,6 +114,25 @@ ULONG STDMETHODCALLTYPE FStreamlineDXGISwapChainProxy::Release()
 	return 0;
 }
 
+HRESULT STDMETHODCALLTYPE FStreamlineDXGISwapChainProxy::Present(UINT SyncInterval, UINT Flags)
+{
+	if (bIsStreamlineProxy && StreamlineRHI)
+	{
+		StreamlineRHI->ExecutePrePresentCommands();
+	}
+	return WrappedSwapchain->Present(SyncInterval, Flags);
+}
+
+HRESULT STDMETHODCALLTYPE FStreamlineDXGISwapChainProxy::Present1(UINT SyncInterval, UINT PresentFlags, const DXGI_PRESENT_PARAMETERS* pPresentParameters)
+{
+	if (bIsStreamlineProxy && StreamlineRHI)
+	{
+		StreamlineRHI->ExecutePrePresentCommands();
+	}
+	return static_cast<IDXGISwapChain1*>(WrappedSwapchain)->Present1(SyncInterval, PresentFlags, pPresentParameters);
+}
+
+
 bool FStreamlineDXGISwapChainProxy::IsEnabled()
 {
 #if UE_VERSION_OLDER_THAN(5,8,0)
@@ -123,7 +142,7 @@ bool FStreamlineDXGISwapChainProxy::IsEnabled()
 #endif
 }
 
-bool FStreamlineDXGISwapChainProxy::WrapSwapChain(IDXGISwapChain** ppSwapChain, const FStreamlineRHI* InStreamlineRHI, bool bIsStreamlineProxy)
+bool FStreamlineDXGISwapChainProxy::WrapSwapChain(IDXGISwapChain** ppSwapChain, FStreamlineRHI* InStreamlineRHI, bool bIsStreamlineProxy)
 {
 	check(ppSwapChain && *ppSwapChain);
 
@@ -141,23 +160,12 @@ bool FStreamlineDXGISwapChainProxy::WrapSwapChain(IDXGISwapChain** ppSwapChain, 
 	return true;
 }
 
-bool FStreamlineDXGISwapChainProxy::WrapSwapChain(IDXGISwapChain1** ppSwapChain, const FStreamlineRHI* InStreamlineRHI, bool bIsStreamlineProxy)
+bool FStreamlineDXGISwapChainProxy::WrapSwapChain(IDXGISwapChain1** ppSwapChain, FStreamlineRHI* InStreamlineRHI, bool bIsStreamlineProxy)
 {
 	return WrapSwapChain(reinterpret_cast<IDXGISwapChain**>(ppSwapChain), InStreamlineRHI, bIsStreamlineProxy);
 }
 
 // Passthrough functions - pure forwards to WrappedSwapchain
-
-HRESULT STDMETHODCALLTYPE FStreamlineDXGISwapChainProxy::Present(UINT SyncInterval, UINT Flags)
-{
-	return WrappedSwapchain->Present(SyncInterval, Flags);
-}
-
-HRESULT STDMETHODCALLTYPE FStreamlineDXGISwapChainProxy::Present1(UINT SyncInterval, UINT PresentFlags, const DXGI_PRESENT_PARAMETERS* pPresentParameters)
-{
-	return static_cast<IDXGISwapChain1*>(WrappedSwapchain)->Present1(SyncInterval, PresentFlags, pPresentParameters);
-}
-
 
 // IDXGIObject
 HRESULT STDMETHODCALLTYPE FStreamlineDXGISwapChainProxy::SetPrivateData(REFGUID Name, UINT DataSize, const void* pData)

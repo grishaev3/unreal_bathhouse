@@ -16,7 +16,7 @@ public class DLSSBlueprint : ModuleRules
 {
 	protected virtual bool IsSupportedPlatform(ReadOnlyTargetRules Target)
 	{
-		return Target.Platform.IsInGroup(UnrealPlatformGroup.Windows);
+		return Target.Platform.IsInGroup(UnrealPlatformGroup.Windows) && (Target.Architecture == UnrealArch.X64);
 	}
 
 	public DLSSBlueprint(ReadOnlyTargetRules Target) : base(Target)

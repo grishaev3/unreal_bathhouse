@@ -24,7 +24,6 @@
 #include "NGXRHI.h"
 #include "StreamlineNGXCommon.h"
 
-#define UE_API DLSS_API
 #if ENGINE_MAJOR_VERSION == 5 && ENGINE_MINOR_VERSION >= 8
 class FDLSSUpscalerHistory final : public ITemporalUpscaler::IHistory, public FRefCountedObject
 #elif ENGINE_MAJOR_VERSION == 5 && ENGINE_MINOR_VERSION >= 3
@@ -89,4 +88,3 @@ private:
 
 };
 
-#undef UE_API

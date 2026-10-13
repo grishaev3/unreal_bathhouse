@@ -28,17 +28,6 @@ bool ForceTagStreamlineBuffers();
 bool ShouldTrackViews();
 bool NeedStreamlineViewIdOverride();
 
-namespace sl
-{
-	enum class Result;
-}
-namespace Streamline
-{
-	enum class EStreamlineFeatureSupport;
-}
-
-Streamline::EStreamlineFeatureSupport TranslateStreamlineResult(sl::Result Result);
-
 #if !ENGINE_PROVIDES_UE_5_6_ID3D12DYNAMICRHI_METHODS
 BEGIN_SHADER_PARAMETER_STRUCT(FDebugLayerCompatibilityShaderParameters, )
 	RDG_TEXTURE_ACCESS(DebugLayerCompatibilityHelperSource, ERHIAccess::CopySrc)
@@ -77,26 +66,3 @@ inline void DebugLayerCompatibilityRHISetup(const FDebugLayerCompatibilityShader
 }
 #endif 
 
-BEGIN_SHADER_PARAMETER_STRUCT(FSLSetStateShaderParameters, )
-END_SHADER_PARAMETER_STRUCT()
-
-template<typename StateOnRenderThreadLambda, typename RHIThreadLambda >
-void AddStreamlineStateRenderPass(const TCHAR* FeatureName, FRDGBuilder& GraphBuilder, uint32 ViewID, const FIntRect& SecondaryViewRect, StateOnRenderThreadLambda&& StateOnRenderThread, RHIThreadLambda&& OnRHIThread)
-{
-	FSLSetStateShaderParameters* PassParameters = GraphBuilder.AllocParameters<FSLSetStateShaderParameters>();
-
-	GraphBuilder.AddPass(
-		RDG_EVENT_NAME("Streamline %s State ViewID = % u", FeatureName, ViewID),
-		PassParameters,
-		ERDGPassFlags::Compute | ERDGPassFlags::Raster | ERDGPassFlags::SkipRenderPass | ERDGPassFlags::NeverCull,
-		[PassParameters, ViewID, SecondaryViewRect, &OnRHIThread, &StateOnRenderThread](FRHICommandListImmediate& RHICmdList) mutable
-		{
-			auto Options = StateOnRenderThread(ViewID, SecondaryViewRect);
-
-			RHICmdList.EnqueueLambda(
-				[ViewID, SecondaryViewRect, Options, &OnRHIThread](FRHICommandListImmediate& Cmd) mutable
-				{
-					OnRHIThread(Cmd, ViewID, SecondaryViewRect, Options);
-				});
-			});
-}

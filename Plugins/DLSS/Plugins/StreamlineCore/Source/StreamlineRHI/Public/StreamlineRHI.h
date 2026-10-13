@@ -28,6 +28,7 @@ namespace sl
 	struct FrameToken;
 	struct APIError;
 	struct FeatureRequirements;
+	using BufferType = uint32_t;
 	using Feature = uint32_t;
 	enum class FeatureRequirementFlags : uint32_t;
 }
@@ -41,27 +42,14 @@ enum class EStreamlineSupport : uint8
 	NotSupportedIncompatibleRHI,
 	NumValues
 };
-
-
-enum class EStreamlineResource
-{
-	Depth,
-	MotionVectors,
-	HUDLessColor,
-	UIColorAndAlpha,
-	Backbuffer,
-	ScalingOutputColor,
-
-	// we use this to size some arrays statically somewhere, but we also don't wanto have a real new enum value so we don't have to handle switch statements ...
-	Last = ScalingOutputColor
-};
+	
 
 class FRHIStreamlineResource
 {
 public:
 	FRHITexture* Texture = nullptr;
 	FIntRect ViewRect = FIntRect(FIntPoint::ZeroValue, FIntPoint::ZeroValue);
-	EStreamlineResource StreamlineTag;
+	sl::BufferType StreamlineTag;
 	ERHIAccess ResourceRHIAccess = ERHIAccess::Unknown;
 
 	// The other option would be to have those be passed in as an extra argument for TagTextures,
@@ -72,23 +60,23 @@ public:
 	FRHITexture* DebugLayerCompatibilityHelperDest = nullptr;
 #endif 
 
-	static FRHIStreamlineResource FromRDGTextureAccess(FRDGTextureAccess InRDGResource, EStreamlineResource InTag)
+	static FRHIStreamlineResource FromRDGTextureAccess(FRDGTextureAccess InRDGResource, sl::BufferType InTag)
 	{
 		return FromRDGTexture(InRDGResource.GetTexture(), InRDGResource.GetAccess(), InTag);
 	}
 
-	static FRHIStreamlineResource FromRDGTextureAccess(FRDGTextureAccess InRDGResource, FIntRect InRect, EStreamlineResource InTag)
+	static FRHIStreamlineResource FromRDGTextureAccess(FRDGTextureAccess InRDGResource, FIntRect InRect, sl::BufferType InTag)
 	{
 		return FromRDGTexture(InRDGResource.GetTexture(), InRDGResource.GetAccess(), InRect, InTag);
 	}
 		 
-	static FRHIStreamlineResource NullResource(EStreamlineResource InTag)
+	static FRHIStreamlineResource NullResource(sl::BufferType InTag)
 	{
 		return { nullptr, FIntRect(FIntPoint::ZeroValue, FIntPoint::ZeroValue), InTag , ERHIAccess::Unknown};
 	}
 
 private:
-	static FRHIStreamlineResource FromRDGTexture(FRDGTexture* InRDGResource, ERHIAccess InResourceState, EStreamlineResource InTag)
+	static FRHIStreamlineResource FromRDGTexture(FRDGTexture* InRDGResource, ERHIAccess InResourceState, sl::BufferType InTag)
 	{
 		return { InRDGResource ? InRDGResource->GetRHI() : nullptr,
 			FIntRect(FIntPoint::ZeroValue,InRDGResource ? InRDGResource->Desc.Extent :FIntPoint::ZeroValue),
@@ -97,7 +85,7 @@ private:
 		};
 	}
 
-	static FRHIStreamlineResource FromRDGTexture(FRDGTexture* InRDGResource, ERHIAccess InResourceState, FIntRect InRect, EStreamlineResource InTag)
+	static FRHIStreamlineResource FromRDGTexture(FRDGTexture* InRDGResource, ERHIAccess InResourceState, FIntRect InRect, sl::BufferType InTag)
 	{
 		return { InRDGResource ? InRDGResource->GetRHI() : nullptr,	InRect,	InTag, InRDGResource ? InResourceState : ERHIAccess::Unknown };
 	}
@@ -209,32 +197,31 @@ public:
 	UE_API virtual void SetStreamlineData(FRHICommandList& CmdList, const FRHIStreamlineArguments& InArguments);
 	UE_API void StreamlineEvaluateDeepDVC(FRHICommandList& CmdList, const FRHIStreamlineResource& InputOutput, sl::FrameToken* FrameToken, uint32 ViewID);
 	
-	void TagTextures(FRHICommandList& CmdList, uint32 InViewID, const sl::FrameToken& FrameToken, std::initializer_list< FRHIStreamlineResource> InResources)
+	void TagTextures(FRHICommandList& CmdList, uint32 InViewID, const sl::FrameToken& FrameToken, std::initializer_list< FRHIStreamlineResource> InResources, bool bIsValidUntilEval = false)
 	{
-		TagTextures(CmdList, InViewID, FrameToken, MakeArrayView(InResources));
+		TagTextures(CmdList, InViewID, FrameToken, MakeArrayView(InResources), bIsValidUntilEval);
 	}
 
-	void TagTexture(FRHICommandList& CmdList, uint32 InViewID, const sl::FrameToken& FrameToken, const FRHIStreamlineResource& InResource)
+	void TagTexture(FRHICommandList& CmdList, uint32 InViewID, const sl::FrameToken& FrameToken, const FRHIStreamlineResource& InResource, bool bIsValidUntilEval = false)
 	{
-		TagTextures(CmdList, InViewID, FrameToken, MakeArrayView<const FRHIStreamlineResource>(&InResource, 1));
+		TagTextures(CmdList, InViewID, FrameToken, MakeArrayView<const FRHIStreamlineResource>(&InResource, 1), bIsValidUntilEval);
 	}
 
 	// Implemented by API specific  subclasses
 	//	
 public: 
-	virtual void TagTextures(FRHICommandList& CmdList, uint32 InViewID, const sl::FrameToken& FrameToken, const TArrayView<const FRHIStreamlineResource> InResources) = 0;
+	virtual void TagTextures(FRHICommandList& CmdList, uint32 InViewID, const sl::FrameToken& FrameToken, const TArrayView<const FRHIStreamlineResource> InResources, bool bIsValidUntilEval = false) = 0;
 	virtual const sl::AdapterInfo* GetAdapterInfo() = 0;
 	virtual void APIErrorHandler(const sl::APIError& LastError) const = 0;
 	
 	virtual bool IsPluginSideSwapchainProxyEnabled() const = 0;
 
-protected:
-
 	virtual void* GetCommandBuffer(FRHICommandList& CmdList, FRHITexture* Texture) = 0;
 	virtual void PostStreamlineFeatureEvaluation(FRHICommandList& CmdList, FRHITexture* Texture) = 0;
 
-
+protected:
 	UE_API TTuple<bool, FString> IsSwapChainProviderRequired(const sl::AdapterInfo& AdapterInfo) const;
+
 public:
 	virtual bool IsDLSSGSupportedByRHI() const
 	{
@@ -277,6 +264,10 @@ public:
 	bool IsUnsupportedPIEActive() const { return bIsUnsupportedPIEActive; }
 #endif
 
+	UE_API void SetPrePresentCommand(TFunction<void()> Lambda);
+	// Only called from custom present implementation. Executes commands for the current frame
+	UE_API void ExecutePrePresentCommands();
+
 protected:
 
 
@@ -318,6 +309,12 @@ protected:
 	TArray<sl::Feature> LoadedFeatures;
 	TArray<sl::Feature> SupportedFeatures;
 
+	struct FPrePresentCommand
+	{
+		TFunction<void()> Execute;
+	};
+	TOptional<FPrePresentCommand> PrePresentCommand;
+	FCriticalSection PrePresentCommandCS;
 };
 
 class IStreamlineRHIModule : public IModuleInterface
@@ -339,6 +336,7 @@ public:
 
 private:
 	FString StreamlineBinaryDirectory;
+	FString StreamlineBinaryFlavor;
 };
 
 STREAMLINERHI_API void PlatformCreateStreamlineRHI();

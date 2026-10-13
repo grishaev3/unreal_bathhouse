@@ -49,7 +49,7 @@ public class StreamlineCore : ModuleRules
 		PublicDependencyModuleNames.AddRange(
 			new string[]
 			{
-				// ... add other public dependencies that you statically link with here ...
+				"StreamlineExtension",
 			}
 			);
 			

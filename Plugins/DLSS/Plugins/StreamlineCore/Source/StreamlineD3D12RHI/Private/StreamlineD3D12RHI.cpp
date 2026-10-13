@@ -48,8 +48,8 @@ struct FShaderCodePackedResourceCounts;
 #include "StreamlineDXGISwapchainProxy.h"
 #include "StreamlineRHI.h"
 #include "StreamlineNGXRHI.h"
-#include "sl.h"
-#include "sl_dlss_g.h"
+#include "sl_core_types.h"
+#include "sl_helpers.h"
 
 
 // The UE module
@@ -62,7 +62,7 @@ DEFINE_LOG_CATEGORY_STATIC(LogStreamlineD3D12RHI, Log, All);
 class FStreamlineD3D12DXGISwapchainProvider : public IDXGISwapchainProvider
 {
 public:
-	FStreamlineD3D12DXGISwapchainProvider(const FStreamlineRHI* InRHI) : StreamlineRHI(InRHI) {}
+	FStreamlineD3D12DXGISwapchainProvider(FStreamlineRHI* InRHI) : StreamlineRHI(InRHI) {}
 
 	virtual ~FStreamlineD3D12DXGISwapchainProvider() = default;
 
@@ -135,7 +135,7 @@ public:
 		return DXGIResult;
 	}
 private:
-	const FStreamlineRHI* StreamlineRHI;
+	FStreamlineRHI* StreamlineRHI;
 };
 
 
@@ -349,7 +349,7 @@ public:
 	};
 
 
-	virtual void TagTextures(FRHICommandList& CmdList, uint32 InViewID, const sl::FrameToken& FrameToken, const TArrayView<const FRHIStreamlineResource> InResources) final
+	virtual void TagTextures(FRHICommandList& CmdList, uint32 InViewID, const sl::FrameToken& FrameToken, const TArrayView<const FRHIStreamlineResource> InResources, bool isValidUntilEval = false) final
 	{
 		RHI_SCOPED_DRAW_EVENT(CmdList, StreamlineTagTextures);
 
@@ -364,15 +364,21 @@ public:
 			UpdateResidency(D3D12RHI, CmdList, Resource.Texture);
 		}
 #endif 
-		// adding + 1 to get to the count
-		constexpr uint32 AllocatorNum = uint32(EStreamlineResource::Last) + 1;
+		constexpr uint32 AllocatorNum = 8;
 
 		// those get filled in also for null input resource so we can "Streamline nulltag" them
 		TArray<sl::Resource, TInlineAllocator<AllocatorNum>> SLResources;
-		TArray<sl::ResourceTag, TInlineAllocator<AllocatorNum>> SLTags;
+		TArray<sl::ResourceTag> SLTags;
 
 		// if all input resources are nullptr, those arrays stay empty below
 		TArray<FStreamlineD3D12Transition, TInlineAllocator<AllocatorNum>> PreTagTransitions;
+
+		// in the unlikely case the number of tagged resources is more than reserved by the inline allocator, pre-allocate arrays to a larger size
+		if (InResources.Num() > AllocatorNum)
+		{
+			SLResources.Reserve(InResources.Num());
+			PreTagTransitions.Reserve(InResources.Num());
+		}
 
 #if !ENGINE_PROVIDES_UE_5_6_ID3D12DYNAMICRHI_METHODS
 		FRHITexture* DebugLayerCompatibilityHelperSource = nullptr;
@@ -386,9 +392,16 @@ public:
 			SLResource.type = sl::ResourceType::eCount;
 
 			sl::ResourceTag SLTag;
-			SLTag.type = ToSL(Resource.StreamlineTag);
+			SLTag.type = Resource.StreamlineTag;
 			// TODO: sl::ResourceLifecycle::eValidUntilPresent would be more efficient, are there any textures where it's applicable?
-			SLTag.lifecycle = sl::ResourceLifecycle::eOnlyValidNow;
+			if(isValidUntilEval)
+			{
+				SLTag.lifecycle = sl::ResourceLifecycle::eValidUntilEvaluate;
+			}
+			else
+			{
+				SLTag.lifecycle = sl::ResourceLifecycle::eOnlyValidNow;
+			}
 
 			if(Resource.Texture && Resource.Texture->IsValid())
 			{
@@ -406,7 +419,7 @@ public:
 				SLResource.type = sl::ResourceType::eTex2d;
 				SLTag.extent = ToSL(Resource.ViewRect);
 
-				check(Resource.StreamlineTag == EStreamlineResource::Backbuffer || Resource.ResourceRHIAccess != ERHIAccess::Unknown);
+				check(Resource.StreamlineTag == sl::kBufferTypeBackbuffer || Resource.ResourceRHIAccess != ERHIAccess::Unknown);
 				
 				const D3D12_RESOURCE_STATES ResourceStates = GetD3D12ResourceStateFromRHIAccess(Resource.ResourceRHIAccess);
 

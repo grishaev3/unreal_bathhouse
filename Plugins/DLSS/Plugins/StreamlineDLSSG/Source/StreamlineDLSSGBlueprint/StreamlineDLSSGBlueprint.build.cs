@@ -17,7 +17,7 @@ public class StreamlineDLSSGBlueprint : ModuleRules
 	// TODO that probably should come from the StreamlineCore plugin
 	protected virtual bool IsSupportedPlatform(ReadOnlyTargetRules Target)
 	{
-		return Target.Platform.IsInGroup(UnrealPlatformGroup.Windows);
+		return Target.Platform.IsInGroup(UnrealPlatformGroup.Windows) && (Target.Architecture == UnrealArch.X64);
 	}
 
 	public StreamlineDLSSGBlueprint(ReadOnlyTargetRules Target) : base(Target)

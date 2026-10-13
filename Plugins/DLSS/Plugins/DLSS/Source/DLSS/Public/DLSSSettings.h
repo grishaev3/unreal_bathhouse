@@ -17,8 +17,6 @@
 
 #include "DLSSSettings.generated.h"
 
-#define UE_API DLSS_API
-
 UENUM()
 enum class EDLSSSettingOverride : uint8
 {
@@ -58,9 +56,9 @@ enum class EDLSSRRPreset : uint8
 	A =  1 UMETA(ToolTip = "Force preset A",Hidden),
 	B =  2 UMETA(ToolTip = "Force preset B",Hidden),
 	C =  3 UMETA(ToolTip = "Force preset C",Hidden),
-	D =  4 UMETA(ToolTip = "Force preset D, Default model (transformer)",DisplayName = "Preset D"),
+	D =  4 UMETA(ToolTip = "Force preset D, Transformer model",DisplayName = "Preset D"),
 	E =  5 UMETA(ToolTip = "Force preset E, Latest transformer model (must use if DoF guide is needed)",DisplayName = "Preset E"),
-	F =  6 UMETA(ToolTip = "Force preset F, Do not use – reverts to default behavior", Hidden),
+	F =  6 UMETA(ToolTip = "Force preset F, Default model RR2", DisplayName = "Preset F"),
 	G =  7 UMETA(ToolTip = "Force preset G, Do not use – reverts to default behavior", Hidden),
 	H =  8 UMETA(ToolTip = "Force preset H, Do not use – reverts to default behavior", Hidden),
 	I =  9 UMETA(ToolTip = "Force preset I, Do not use – reverts to default behavior", Hidden),
@@ -231,4 +229,3 @@ public:
 
 };
 
-#undef UE_API

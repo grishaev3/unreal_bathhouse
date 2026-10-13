@@ -18,24 +18,25 @@
 #if UE_VERSION_NEWER_THAN(5,4,0)
 #include "Blueprint/BlueprintExceptionInfo.h"
 #endif
+
+#include "StreamlineFeatureSupport.h"
+
 #include "StreamlineLibrary.generated.h"
 
 #define UE_API STREAMLINEBLUEPRINT_API
 
-//namespace sl
-//{
-//	struct Version;
-//}
+// Note that more EStreamlineFeature values may be dynamically added by Streamline feature extension plugins.
+// Generally a Streamline feature registered with FStreamlineExtensionModule will add a value to this UENUM.
+// This is convenient for Blueprints but not helpful for C++ since the static enum values are compile-time
+// constants. C++ should use the FName variants of functions like IsStreamlineFeatureSupported() and query
+// features by name instead of by enum.
 
-// That should be updated if new BP libraries are added for new featurew
-#define STREAMLINE_LIBARY_KEYWORDS "DLSS-G, Reflex, DeepDVC, Streamline"
 UENUM(BlueprintType)
 enum class EStreamlineFeature : uint8
 {
 	DLSSG UMETA(DisplayName = "DLSS Frame Generation"),
 	Reflex UMETA(DisplayName = "Reflex"),
-	DeepDVC UMETA(DisplayName = "DeepDVC"),
-	Count UMETA(Hidden)
+	DeepDVC UMETA(DisplayName = "DeepDVC")
 };
 
 
@@ -51,7 +52,8 @@ enum class EStreamlineFeatureSupport : uint8
 	NotSupportedHardewareSchedulingDisabled UMETA(DisplayName = "Hardware Scheduling Disabled", ToolTip = "This feature requires Windows Hardware Scheduling to be Enabled"),
 	NotSupportedByRHI UMETA(DisplayName = "Not supported by RHI", ToolTip = "This RHI doesn't not support this feature run time."),
 	NotSupportedByPlatformAtBuildTime UMETA(DisplayName = "Platform Not Supported At Build Time", ToolTip = "This platform doesn't not support this feature at build time. Currently this feature is only supported on Windows 64"),
-	NotSupportedIncompatibleAPICaptureToolActive UMETA(DisplayName = "Incompatible API Capture Tool Active", ToolTip = "This feature is not compatible with an active API capture tool such as RenderDoc.")
+	NotSupportedIncompatibleAPICaptureToolActive UMETA(DisplayName = "Incompatible API Capture Tool Active", ToolTip = "This feature is not compatible with an active API capture tool such as RenderDoc."),
+	NotSupportedUnknownFeature UMETA(DisplayName = "Unknown Streamline feature", ToolTip = "This is not a loaded Streamline feature")
 };
 
 
@@ -85,8 +87,6 @@ public:
 
 };
 
-static_assert(uint8(EStreamlineFeature::Count) == 3u, "dear NVIDIA plugin developer, please update the Keywords below handle the new enum values");
-
 USTRUCT(BlueprintType)
 struct FStreamlineFeatureRequirements 
 {
@@ -118,23 +118,27 @@ class  UStreamlineLibrary : public UBlueprintFunctionLibrary
 	GENERATED_BODY()
 public:
 
-		/** Checks whether a Streamline feature is supported by the current GPU. Further details can be retrieved via QueryStreamlineFeatureSupport*/
 	UFUNCTION(BlueprintPure, Category = "Streamline", meta = (DisplayName = "Get NVIDIA Streamline Feature information", Keywords = "Reflex, DLSS-G, DeepDVC"))
 	static UE_API FStreamlineFeatureRequirements GetStreamlineFeatureInformation(EStreamlineFeature Feature);
 
-	UFUNCTION(BlueprintPure, Category = "Streamline", meta = (/*DisplayName = "Get Streamline Feature Requirements", */Keywords = "Reflex, DLSS-G, DeepDVC"))
+	UFUNCTION(BlueprintPure, Category = "Streamline", meta = (Keywords = "Reflex, DLSS-G, DeepDVC"))
 	static UE_API void BreakStreamlineFeatureRequirements(EStreamlineFeatureRequirementsFlags Requirements, bool& D3D11Supported, bool& D3D12Supported, bool& VulkanSupported, bool& VSyncOffRequired, bool& HardwareSchedulingRequired);
 
 	/** Checks whether a Streamline feature is supported by the current GPU. Further details can be retrieved via QueryStreamlineFeatureSupport*/
 	UFUNCTION(BlueprintPure, Category = "Streamline", meta = (DisplayName = "Is NVIDIA Streamline Feature Supported", Keywords = "Reflex, DLSS-G, DeepDVC" ))
 	static UE_API bool IsStreamlineFeatureSupported(EStreamlineFeature Feature);
 
-	/** Checks whether Streamline feature  is supported by the current GPU	*/
+	/** Checks whether Streamline feature is supported by the current GPU	*/
 	UFUNCTION(BlueprintPure, Category = "Streamline", meta = (DisplayName = "Query NVIDIA Streamline Feature Support", Keywords = "Reflex, DLSS-G, DeepDVC"))
 	static UE_API EStreamlineFeatureSupport QueryStreamlineFeatureSupport(EStreamlineFeature Feature);
 
 
-	static UE_API void RegisterFeatureSupport(EStreamlineFeature Feature, EStreamlineFeatureSupport Support);
+	/** C++ API for other BP library modules to use */
+	static UE_API EStreamlineFeatureSupport QueryStreamlineFeatureSupport(FName FeatureName);
+	static bool IsStreamlineFeatureSupported(FName FeatureName)
+	{
+		return QueryStreamlineFeatureSupport(FeatureName) == EStreamlineFeatureSupport::Supported;
+	}
 
 protected:
 
@@ -144,12 +148,10 @@ protected:
 private:
 
 	
-	static TStaticArray<FStreamlineFeatureRequirements, static_cast<uint8>(EStreamlineFeature::Count)> Features;
-	
-	static int32 ValidateAndConvertToIndex(EStreamlineFeature Feature);
-
-
+	static TMap<EStreamlineFeature, FStreamlineFeatureRequirements> FeatureRequirements;
+	static TMap<FName, EStreamlineFeature> StreamlineFeatureFromName;
 	static bool bStreamlineLibraryInitialized;
+
 	static bool TryInitStreamlineLibrary();
 };
 
@@ -206,12 +208,7 @@ bool ValidateEnumBitFlags(UE Value, const char* CallSite)
 	return bIsValid;
 }
 
-
-// TODO maybe move inter SL plugin stuff into a separate header?
-#if WITH_STREAMLINE
-#include "StreamlineCore.h"
 STREAMLINEBLUEPRINT_API EStreamlineFeatureSupport ToUStreamlineFeatureSupport(Streamline::EStreamlineFeatureSupport Support);
-#endif
 
 
 class FStreamlineBlueprintModule final : public IModuleInterface
@@ -226,3 +223,4 @@ private:
 };
 
 #undef UE_API
+

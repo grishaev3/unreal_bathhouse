@@ -99,14 +99,10 @@ public:
 	static void Startup();
 	static void Shutdown();
 private:
-	static EStreamlineFeatureSupport DLSSGSupport;
 
 #if WITH_STREAMLINE
 
-
 	static bool bDLSSGLibraryInitialized;
-
-
 
 	static bool TryInitDLSSGLibrary();
 

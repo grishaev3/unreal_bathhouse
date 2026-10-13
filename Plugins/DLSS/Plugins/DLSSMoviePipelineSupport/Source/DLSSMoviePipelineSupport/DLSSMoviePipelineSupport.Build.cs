@@ -17,6 +17,13 @@ public class DLSSMoviePipelineSupport : ModuleRules
 	{
 		ShortName = "DLSSMPS";
 
+		PublicDependencyModuleNames.AddRange(
+			new string[]
+			{
+				"StreamlineNGXCommon"
+			}
+		);
+
 		PrivateDependencyModuleNames.AddRange(
 			new string[]
 			{
@@ -26,7 +33,7 @@ public class DLSSMoviePipelineSupport : ModuleRules
 				"DLSSBlueprint",
 				"Engine",
 				"MovieRenderPipelineCore",
-				"MovieRenderPipelineRenderPasses",
+				"MovieRenderPipelineRenderPasses"
 			}
 		);
 	}

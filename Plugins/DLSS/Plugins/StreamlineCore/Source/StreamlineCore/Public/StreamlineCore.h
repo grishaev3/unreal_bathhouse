@@ -12,6 +12,7 @@
 
 #include "Modules/ModuleManager.h"
 
+#include "StreamlineFeatureSupport.h"
 
 class FStreamlineViewExtension;
 class FStreamlineMaxTickRateHandler;
@@ -20,31 +21,19 @@ class FStreamlineLatencyMarkers;
 enum class EStreamlineSupport : uint8;
 class FStreamlineRHI;
 
-namespace Streamline
+namespace sl
 {
-	enum class EStreamlineFeature
-	{
-		DLSSG,
-		Reflex,
-		DeepDVC,
-		NumValues
-	};
+	using Feature = uint32_t;
+}
 
-	enum class EStreamlineFeatureSupport
-	{
-		Supported,
-		NotSupported,
 
-		NotSupportedIncompatibleHardware,
-		NotSupportedHardwareSchedulingDisabled,
-		NotSupportedOperatingSystemOutOfDate,
-		NotSupportedDriverOutOfDate,
+extern STREAMLINECORE_API Streamline::EStreamlineFeatureSupport QueryStreamlineFeatureSupport(FName InFeatureName);
+inline bool IsStreamlineFeatureSupported(FName InFeatureName)
+{
+	return QueryStreamlineFeatureSupport(InFeatureName) == Streamline::EStreamlineFeatureSupport::Supported;
+}
 
-		NotSupportedIncompatibleRHI,
-
-		NumValues
-	};
-};
+extern STREAMLINECORE_API TOptional<sl::Feature> GetStreamlineFeatureID(FName InFeatureName);
 
 
 class IStreamlineModuleInterface : public IModuleInterface

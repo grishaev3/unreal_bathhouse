@@ -13,7 +13,7 @@
 
 #include "nvsdk_ngx.h"
 #include "nvsdk_ngx_helpers.h"
-#include "nvsdk_ngx_helpers_dlssd.h"
+#include "nvsdk_ngx_helpers_dlssd_d3d.h"
 
 #include "ID3D11DynamicRHI.h"
 #include "GenericPlatform/GenericPlatformFile.h"
@@ -302,7 +302,9 @@ void FNGXD3D11RHI::ExecuteDLSS(FRHICommandList& CmdList, const FRHIDLSSArguments
 
 	// execute
 
+#if UE_VERSION_OLDER_THAN(5,8,0)
 	D3D11RHI->RHIRegisterWork(1);
+#endif
 
 	if (InDLSSState->DLSSFeature->bHasDLSSRR)
 	{

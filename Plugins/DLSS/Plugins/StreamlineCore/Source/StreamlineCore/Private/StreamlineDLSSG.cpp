@@ -10,26 +10,30 @@
 */
 
 #include "StreamlineDLSSG.h"
-#include "StreamlineCore.h"
-#include "StreamlineShaders.h"
-#include "StreamlineCorePrivate.h"
+
 #include "StreamlineAPI.h"
+#include "StreamlineCore.h"
+#include "StreamlineCorePrivate.h"
+#include "StreamlineDXGISwapchainProxy.h"
+#include "StreamlineRenderPass.h"
 #include "StreamlineRHI.h"
 #include "StreamlineViewExtension.h"
-#include "sl_helpers.h"
 #include "sl_dlss_g.h"
 #include "UIHintExtractionPass.h"
 
 #include "CoreMinimal.h"
+#include "Engine/Engine.h"
 #include "Framework/Application/SlateApplication.h"
+#include "RenderGraphBuilder.h"
+#include "ScenePrivate.h"
 #if UE_VERSION_AT_LEAST(5,8,0)
+#include "SceneViewState.h"
 #include "Slate/SlateViewportProvider.h"
 #endif
-#include "RenderGraphBuilder.h"
-#include "Runtime/Launch/Resources/Version.h"
-#include "ScenePrivate.h"
 #include "SystemTextures.h"
 #include "HAL/PlatformApplicationMisc.h"
+
+#include <atomic>
 
 static FDelegateHandle OnPreRHIViewportCreateHandle;
 static FDelegateHandle OnPostRHIViewportCreateHandle;
@@ -88,12 +92,6 @@ static TAutoConsoleVariable<bool> CVarStreamlineDLSSGCheckStatusPerFrame(
 	TEXT("Check the DLSSG status at runtime and assert if it's failing somehow (default = true)\n"),
 	ECVF_RenderThreadSafe);
 
-static TAutoConsoleVariable<bool> CVarStreamlineForceTagging(
-	TEXT("r.Streamline.ForceTagging"),
-	false,
-	TEXT("Force tagging Streamline resources even if they are not required based on active Streamline features (default = false)\n"),
-	ECVF_RenderThreadSafe);
-
 static TAutoConsoleVariable<bool> CVarStreamlineFullScreenMenuDetection(
 	TEXT("r.Streamline.DLSSG.FullScreenMenuDetection"),
 	false,
@@ -110,10 +108,13 @@ static TAutoConsoleVariable<bool> CVarStreamlineDLSSGRetainResourcesWhenOff(
 static TAutoConsoleVariable<int32> CVarStreamlineDLSSGDynamicResolutionMode(
 	TEXT("r.Streamline.DLSSG.DynamicResolutionMode"),
 	0,
-	TEXT("Experimental: Pass in sl::DLSSGFlags::eDynamicResolutionEnabled (default = 0)\n")
-		TEXT("0: off\n")
-	TEXT("1: on\n"),
+	TEXT("Experimental: Configure DLSS-G dynamic-resolution support (default = 0)\n")
+	TEXT("0: off\n")
+	TEXT("1: force on\n")
+	TEXT("2: automatic based on UE dynamic-resolution state\n"),
 	ECVF_RenderThreadSafe);
+
+static std::atomic<bool> GStreamlineDLSSGIsDynamicResolutionActive{ false };
 
 static TAutoConsoleVariable<int32> CVarStreamlineDLSSGFramesToGenerate(
 	TEXT("r.Streamline.DLSSG.FramesToGenerate"),
@@ -125,18 +126,6 @@ static TAutoConsoleVariable<int32> CVarStreamlineDLSSGFramesToGenerate(
 
 static int32 NumDLSSGInstances = 0;
 
-
-bool ForceTagStreamlineBuffers()
-{
-	static bool bStreamlineForceTagging = FParse::Param(FCommandLine::Get(), TEXT("slforcetagging"));
-	return bStreamlineForceTagging || CVarStreamlineForceTagging.GetValueOnAnyThread();
-}
-
-
-bool ShouldTagStreamlineBuffers()
-{
-	return ForceTagStreamlineBuffers() || IsDLSSGActive();
-}
 
 bool ShouldTrackViews()
 {
@@ -208,7 +197,11 @@ static void DLSSGOnBackBufferReadyToPresent(SWindow& InWindow
 {
 	check(IsInRenderingThread());
 
+#if !UE_VERSION_OLDER_THAN(5,8,0)
+	const bool bIsGameWindow = InWindow.GetType() == EWindowType::Normal;
+#else
 	const bool bIsGameWindow = InWindow.GetType() == EWindowType::GameWindow;
+#endif
 #if WITH_EDITOR
 	const bool bIsPIEWindow = GIsEditor && (InWindow.GetTitle().ToString().Contains(TEXT("Preview [NetMode:")));
 #else
@@ -252,7 +245,15 @@ static void DLSSGOnBackBufferReadyToPresent(SWindow& InWindow
 		}
 		else
 		{
+#if !UE_VERSION_OLDER_THAN(5,8,0)
+			// because the bIsGameWindow check above doesn't work in 5.8 :-(
+			if (GIsEditor)
+			{
+				return;
+			}
+#else
 			check(!GIsEditor);
+#endif
 		}
 	}
 	else
@@ -695,7 +696,10 @@ STREAMLINECORE_API void GetStreamlineDLSSGFrameTiming(float& FrameRateInHertz, i
 
 void AddStreamlineDLSSGStateRenderPass(FRDGBuilder& GraphBuilder, uint32 ViewID, const FIntRect& SecondaryViewRect)
 {
-	AddStreamlineStateRenderPass (TEXT("DLSS-G"), GraphBuilder, ViewID, SecondaryViewRect,
+	// Prefer to run on present thread, but fall back to RHI thread for deprecated non-proxy path
+	ESetSLStateThread SetStateThread = FStreamlineDXGISwapChainProxy::IsEnabled() ? ESetSLStateThread::PresentThread : ESetSLStateThread::RHIThread;
+
+	AddStreamlineStateRenderPass<true> (TEXT("DLSS-G"), GraphBuilder, ViewID, SecondaryViewRect,
 		// this lambda computes the SL options struct based on cvars and other state
 		[] (uint32 ViewID, const FIntRect & SecondaryViewRect) ->sl::DLSSGOptions
 		{
@@ -720,9 +724,20 @@ void AddStreamlineDLSSGStateRenderPass(FRDGBuilder& GraphBuilder, uint32 ViewID,
 				EnumAddFlags(SLConstants.flags, sl::DLSSGFlags::eEnableFullscreenMenuDetection);
 			}
 
-			if (CVarStreamlineDLSSGDynamicResolutionMode.GetValueOnRenderThread() != 0)
+			const int32 DynamicResolutionMode = CVarStreamlineDLSSGDynamicResolutionMode.GetValueOnRenderThread();
+			const bool bUseDynamicResolution = DynamicResolutionMode == 1 ||
+				(DynamicResolutionMode == 2 && GStreamlineDLSSGIsDynamicResolutionActive.load(std::memory_order_relaxed));
+			if (bUseDynamicResolution)
 			{
 				EnumAddFlags(SLConstants.flags, sl::DLSSGFlags::eDynamicResolutionEnabled);
+
+				static const TConsoleVariableData<float>* CVarDynamicResMinScreenPercentage =
+					IConsoleManager::Get().FindTConsoleVariableDataFloat(TEXT("r.DynamicRes.MinScreenPercentage"));
+				const float TargetResolutionFraction = CVarDynamicResMinScreenPercentage
+					? FMath::Clamp(CVarDynamicResMinScreenPercentage->GetValueOnRenderThread() / 100.0f, 0.01f, 1.0f)
+					: 0.5f;
+				SLConstants.dynamicResWidth = static_cast<uint32_t>(FMath::Max(1, FMath::RoundToInt(SecondaryViewRect.Width() * TargetResolutionFraction)));
+				SLConstants.dynamicResHeight = static_cast<uint32_t>(FMath::Max(1, FMath::RoundToInt(SecondaryViewRect.Height() * TargetResolutionFraction)));
 			}
 
 			if (CVarStreamlineDLSSGRetainResourcesWhenOff.GetValueOnRenderThread() != 0)
@@ -735,15 +750,25 @@ void AddStreamlineDLSSGStateRenderPass(FRDGBuilder& GraphBuilder, uint32 ViewID,
 			return SLConstants;
 		},
 		// this lambda is only here since templating the function pointer and functin name and such below is inconvenient
-		[](FRHICommandListImmediate& RHICmdList, uint32 ViewID, const FIntRect& SecondaryViewRect, const sl::DLSSGOptions& Options)
+		[](uint32 ViewID, const sl::DLSSGOptions& Options)
 		{
 			CALL_SL_FEATURE_FN(sl::kFeatureDLSS_G, slDLSSGSetOptions, sl::ViewportHandle(ViewID), Options);
-		}
+		},
+		SetStateThread
 		);
 }
 
 void BeginRenderViewFamilyDLSSG(FSceneViewFamily& InViewFamily)
 {
+	bool bIsDynamicResolutionActive = false;
+	if (GEngine)
+	{
+		FDynamicResolutionStateInfos DynamicResolutionStateInfos;
+		GEngine->GetDynamicResolutionCurrentStateInfos(DynamicResolutionStateInfos);
+		bIsDynamicResolutionActive = DynamicResolutionStateInfos.Status == EDynamicResolutionStatus::Enabled;
+	}
+	GStreamlineDLSSGIsDynamicResolutionActive.store(bIsDynamicResolutionActive, std::memory_order_relaxed);
+
 	if(IsDLSSGActive() && CVarStreamlineDLSSGAdjustMotionBlurTimeScale.GetValueOnAnyThread() && InViewFamily.Views.Num())
 	{
 		// this is 1 when FG is off (or auto modes turns it off)

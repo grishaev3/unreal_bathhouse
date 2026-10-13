@@ -66,19 +66,35 @@ public class DLSS : ModuleRules
 			{
 					"Core",
 					"CoreUObject",
+					"DeveloperSettings",
 					"EngineSettings",
 					"Engine",
+					"Projects",
 					"RenderCore",
 					"Renderer",
 					"RHI",
-					"NGX",
-					"Projects",
-                    "DeveloperSettings",
+
 					"DLSSUtility",
+					"NGX",
 					"NGXRHI",
 				// ... add private dependencies that you statically link with here ...	
 			}
 			);
+
+		// test code requires some more dependencies
+		if (Target.Configuration != UnrealTargetConfiguration.Shipping)
+		{
+			PrivateDependencyModuleNames.AddRange(
+				new string[]
+				{
+					"D3D11RHI",
+					"D3D12RHI",
+					"NVAPI",
+				}
+			);
+			AddEngineThirdPartyPrivateStaticDependencies(Target, "DX11");
+			AddEngineThirdPartyPrivateStaticDependencies(Target, "DX12");
+		}
 
 #if UE_5_6_OR_LATER
 		PrivateDefinitions.Add("ENGINE_SUPPORTS_UPSCALER_MODULAR_FEATURE=1");

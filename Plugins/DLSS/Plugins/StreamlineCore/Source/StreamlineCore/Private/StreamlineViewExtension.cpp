@@ -10,14 +10,16 @@
 */
 
 #include "StreamlineViewExtension.h"
-#include "StreamlineShaders.h"
+
+#include "StreamlineAPI.h"
 #include "StreamlineCorePrivate.h"
 #include "StreamlineDLSSG.h"
 #include "StreamlineDLSSGCustomPresent.h"
 #include "StreamlineDeepDVC.h"
-#include "StreamlineRHI.h"
-#include "StreamlineAPI.h"
 #include "StreamlineDXGISwapchainProxy.h"
+#include "StreamlineExtension.h"
+#include "StreamlineFeature.h"
+#include "StreamlineRHI.h"
 
 #include "ClearQuad.h"
 #include "Engine/GameViewportClient.h"
@@ -62,7 +64,11 @@ static TAutoConsoleVariable<bool> CVarStreamlineTagVelocities(
 	TEXT("Pass motion vectors into Streamline  (default = true)\n"),
 	ECVF_RenderThreadSafe);
 
-
+static TAutoConsoleVariable<bool> CVarStreamlineForceTagging(
+	TEXT("r.Streamline.ForceTagging"),
+	false,
+	TEXT("Force tagging Streamline resources even if they are not required based on active Streamline features (default = false)\n"),
+	ECVF_RenderThreadSafe);
 
 static TAutoConsoleVariable<int32> CVarStreamlineDilateMotionVectors(
 	TEXT("r.Streamline.DilateMotionVectors"),
@@ -120,7 +126,6 @@ int GetViewIndexToTag()
 	return CVarStreamlineViewIndexToTag->GetInt();
 }
 
-
 bool NeedStreamlineViewIdOverride()
 {
 	if (CVarStreamlineViewIdOverride->GetInt() == -1)
@@ -133,16 +138,46 @@ bool NeedStreamlineViewIdOverride()
 	}
 }
 
+bool ForceTagStreamlineBuffers()
+{
+	static bool bStreamlineForceTagging = FParse::Param(FCommandLine::Get(), TEXT("slforcetagging"));
+	return bStreamlineForceTagging || CVarStreamlineForceTagging.GetValueOnAnyThread();
+}
+
+static EStreamlineInputType GetInputTypes()
+{
+	EStreamlineInputType InputTypes = FStreamlineExtensionModule::Get().GetRequiredInputs_RenderThread();
+
+	if (ForceTagStreamlineBuffers() || IsDLSSGActive())
+	{
+		EnumAddFlags(InputTypes, EStreamlineInputType::Color | EStreamlineInputType::Velocity | EStreamlineInputType::SceneDepth);
+	}
+
+	return InputTypes;
+}
+
+static bool ShouldTagStreamlineBuffers(EStreamlineInputType InputTypes)
+{
+	return EnumHasAnyFlags(InputTypes, EStreamlineInputType::SceneDepth | EStreamlineInputType::Velocity);
+}
+
+bool ShouldTagStreamlineBuffers()
+{
+	return ShouldTagStreamlineBuffers(GetInputTypes());
+}
+
 static FViewportRHIRef FindGameRHIViewport()
 {
 	// somewhat inspired by UE::DisplayCluster::Projection::EasyBlend::FindRHIViewport
 	FViewportRHIRef ViewportRHI{};
 	if (GEngine && GEngine->GameViewport)
 	{
+#if UE_VERSION_OLDER_THAN(5,8,0)
 		if (GEngine->GameViewport->Viewport)
 		{
 			ViewportRHI = GEngine->GameViewport->Viewport->GetViewportRHI();
 		}
+#endif
 		if (!ViewportRHI)
 		{
 			// since that didn't work, try slate instead
@@ -154,7 +189,11 @@ static FViewportRHIRef FindGameRHIViewport()
 				{
 					FSlateRenderer* SlateRenderer = FSlateApplication::Get().GetRenderer();
 					void* ViewportResource = SlateRenderer->GetViewportResource(*Window);
+#if !UE_VERSION_OLDER_THAN(5,8,0)
+					ViewportRHI = static_cast<FRHIViewport*>(ViewportResource);
+#else
 					ViewportRHI = *((FViewportRHIRef*)ViewportResource);
+#endif
 				}
 			}
 		}
@@ -200,7 +239,6 @@ FStreamlineViewExtension::FStreamlineViewExtension(const FAutoRegister& AutoRegi
 		{
 			FSlateRenderer* SlateRenderer = FSlateApplication::Get().GetRenderer();
 			check(SlateRenderer);
-
 
 			UE_LOG(LogStreamline, Log, TEXT("Unregistering of OnPreResizeWindowBackBuffer callback during FSlateApplication::OnPreShutdown"));
 			SlateRenderer->OnPreResizeWindowBackBuffer().Remove(OnPreResizeWindowBackBufferHandle);
@@ -257,7 +295,6 @@ FStreamlineViewExtension::~FStreamlineViewExtension()
 
 void FStreamlineViewExtension::SetupViewFamily(FSceneViewFamily& InViewFamily)
 {
-
 }
 
 void FStreamlineViewExtension::SetupView(FSceneViewFamily& InViewFamily, FSceneView& InView)
@@ -356,7 +393,6 @@ void FStreamlineViewExtension::PreRenderViewFamily_RenderThread(FGraphBuilderOrC
 	
 	for (uint32 StaleView : StaleViews)
 	{
-
 		// an alternative to this could be to add "GetCommandListFromEither" function in the header...
 #if ENGINE_MAJOR_VERSION == 4 
 		GraphBuilderOrCmd.
@@ -381,7 +417,6 @@ void FStreamlineViewExtension::PostRenderView_RenderThread(FGraphBuilderOrCmdLis
 
 void FStreamlineViewExtension::PostRenderViewFamily_RenderThread(FGraphBuilderOrCmdList&, FSceneViewFamily& InViewFamily)
 {
-
 }
 
 void AddStreamlineUIHintTagPass(
@@ -397,8 +432,6 @@ void AddStreamlineUIHintTagPass(
 	bool HasViewIdOverride
 )
 {
-
-
 	GraphBuilder.AddPass(
 		RDG_EVENT_NAME("Streamline Tag {Backbuffer=%u UIColorAndAlpha=%u} NumViews=%u  WindowClient%dx%d [%d,%d -> %d,%d] Texture=%s",
 			bTagBackbuffer, bTagUIColorAlpha,
@@ -417,7 +450,7 @@ void AddStreamlineUIHintTagPass(
 				TArray<FRHIStreamlineResource, TInlineAllocator<2>> TexturesToTagOrUntag;
 				
 				check(!!PassParameters->BackBuffer == bTagBackbuffer);
-				TexturesToTagOrUntag.Add(FRHIStreamlineResource::FromRDGTextureAccess(PassParameters->BackBuffer, View.UnscaledViewRect, EStreamlineResource::Backbuffer));
+				TexturesToTagOrUntag.Add(FRHIStreamlineResource::FromRDGTextureAccess(PassParameters->BackBuffer, View.UnscaledViewRect, sl::kBufferTypeBackbuffer));
 				if (bTagBackbuffer)
 				{
 					check(PassParameters->BackBuffer);
@@ -425,7 +458,7 @@ void AddStreamlineUIHintTagPass(
 				}
 
 				check(!!PassParameters->UIColorAndAlpha == bTagUIColorAlpha);
-				TexturesToTagOrUntag.Add(FRHIStreamlineResource::FromRDGTextureAccess(PassParameters->UIColorAndAlpha, View.UnscaledViewRect, EStreamlineResource::UIColorAndAlpha));
+				TexturesToTagOrUntag.Add(FRHIStreamlineResource::FromRDGTextureAccess(PassParameters->UIColorAndAlpha, View.UnscaledViewRect, sl::kBufferTypeUIColorAndAlpha));
 				if (bTagUIColorAlpha)
 				{
 					check(PassParameters->UIColorAndAlpha);
@@ -449,7 +482,6 @@ void AddStreamlineUIHintTagPass(
 				});
 			}
 	});
-
 	
 	GraphBuilder.Execute();
 }
@@ -469,8 +501,6 @@ void FStreamlineViewExtension::SubscribeToPostProcessingPass(
 		InOutPassCallbacks.Add(FAfterPassCallbackDelegate::CreateRaw(this, &FStreamlineViewExtension::PostProcessPassAtEnd_RenderThread));
 	}
 }
-
-
 
 
 /*
@@ -581,12 +611,17 @@ FScreenPassTexture FStreamlineViewExtension::PostProcessPassAtEnd_RenderThread(F
 		ViewID, ViewRect.Width(), ViewRect.Height(),
 		ViewRect.Min.X, ViewRect.Min.Y,
 		ViewRect.Max.X, ViewRect.Max.Y);
+#if UE_VERSION_OLDER_THAN(5,8,0)
 	RDG_GPU_STAT_SCOPE(GraphBuilder, Streamline);
+#endif
 
-	if (ShouldTagStreamlineBuffers())
+	FStreamlineRenderPassInputs Inputs{ GraphBuilder, ViewInfo, SceneColor };
+	Inputs.StreamlineRHIExtensions = StreamlineRHIExtensions;
+	Inputs.ViewID = ViewID;
+	const EStreamlineInputType InputTypes = GetInputTypes();
+
+	if (ShouldTagStreamlineBuffers(InputTypes))
 	{
-		const uint64 FrameNumber = GFrameNumberRenderThread;
-
 #if ENGINE_MAJOR_VERSION == 4
 		FSceneRenderTargets& SceneTextures = FSceneRenderTargets::Get(GraphBuilder.RHICmdList);
 #elif ENGINE_MAJOR_VERSION == 5 && ENGINE_MINOR_VERSION < 1
@@ -594,10 +629,6 @@ FScreenPassTexture FStreamlineViewExtension::PostProcessPassAtEnd_RenderThread(F
 #else
 		FSceneTextures SceneTextures = ViewInfo.GetSceneTextures();
 #endif
-
-		// input color
-		FRDGTextureRef SceneColorAfterTonemap = SceneColor.Texture;
-		check(SceneColorAfterTonemap);
 
 		// input motion vectors
 #if (ENGINE_MAJOR_VERSION == 5) && (ENGINE_MINOR_VERSION >= 4)
@@ -614,14 +645,6 @@ FScreenPassTexture FStreamlineViewExtension::PostProcessPassAtEnd_RenderThread(F
 #endif
 		}
 
-		//input depth
-#if ENGINE_MAJOR_VERSION == 4
-		FRDGTextureRef SceneDepth = GraphBuilder.RegisterExternalTexture(SceneTextures.SceneDepthZ);
-#else
-		FRDGTextureRef SceneDepth = SceneTextures.Depth.Resolve;
-#endif
-		check(SceneDepth);
-
 #if SUPPORT_GUIDE_GBUFFER
 		FRDGTextureRef AlternateMotionVector = SceneTextures.AlternateMotionVector;
 #else
@@ -632,11 +655,10 @@ FScreenPassTexture FStreamlineViewExtension::PostProcessPassAtEnd_RenderThread(F
 
 		FSLShaderParameters* PassParameters = GraphBuilder.AllocParameters<FSLShaderParameters>();
 
-		// Those are consumed directly by SL 
-		// FRDGTextureRef SLDepth = SceneDepth; 
+		// Those are consumed directly by SL
+		// FRDGTextureRef SLDepth = Inputs.SceneDepth;
 
 		// Those hold the outputs from various render passes that convert from engine textures into the SL specific formats
-		FRDGTextureRef SLVelocity = nullptr;
 		FRDGTextureRef SLSceneColorWithoutHUD = nullptr;
 
 		const bool bTagSceneColorWithoutHUD = GIsEditor ? CVarStreamlineTagEditorSceneColorWithoutHUD.GetValueOnRenderThread() : CVarStreamlineTagSceneColorWithoutHUD.GetValueOnRenderThread();
@@ -652,17 +674,27 @@ FScreenPassTexture FStreamlineViewExtension::PostProcessPassAtEnd_RenderThread(F
 			PassParameters->SceneColorWithoutHUD = SLSceneColorWithoutHUD;
 		}
 
-		const bool bTagMotionVectors = CVarStreamlineTagVelocities.GetValueOnRenderThread() != 0;
+		const bool bTagMotionVectors = EnumHasAnyFlags(InputTypes, EStreamlineInputType::Velocity) || (CVarStreamlineTagVelocities.GetValueOnRenderThread() != 0);
 		const bool bDilateMotionVectors = CVarStreamlineDilateMotionVectors.GetValueOnRenderThread() != 0;
-		
-		if (bTagMotionVectors)
+
+		//input depth is also used in velocity combine pass
+		if (bTagMotionVectors || EnumHasAnyFlags(InputTypes, EStreamlineInputType::SceneDepth))
 		{
-			SLVelocity = AddStreamlineVelocityCombinePass(GraphBuilder, ViewInfo, SceneDepth, SceneVelocity, AlternateMotionVector, bDilateMotionVectors);
-			PassParameters->Velocity = SLVelocity;
+#if ENGINE_MAJOR_VERSION == 4
+			Inputs.SceneDepth = GraphBuilder.RegisterExternalTexture(SceneTextures.SceneDepthZ);
+#else
+			Inputs.SceneDepth = SceneTextures.Depth.Resolve;
+#endif
+			check(Inputs.SceneDepth);
 		}
 
-		PassParameters->Depth = SceneDepth;
+		if (bTagMotionVectors)
+		{
+			Inputs.SLVelocity = AddStreamlineVelocityCombinePass(GraphBuilder, ViewInfo, Inputs.SceneDepth, SceneVelocity, AlternateMotionVector, bDilateMotionVectors);
+			PassParameters->Velocity = Inputs.SLVelocity;
+		}
 
+		PassParameters->Depth = Inputs.SceneDepth;
 
 		FRHIStreamlineArguments StreamlineArguments = {};
 		FMemory::Memzero(StreamlineArguments);
@@ -672,7 +704,7 @@ FScreenPassTexture FStreamlineViewExtension::PostProcessPassAtEnd_RenderThread(F
 
 		// TODO STREAMLINE check for other conditions, similar to DLSS
 		StreamlineArguments.bReset = View.bCameraCut;
-		
+
 		StreamlineArguments.bIsDepthInverted = true;
 
 		StreamlineArguments.JitterOffset = { float(ViewInfo.TemporalJitterPixels.X), float(ViewInfo.TemporalJitterPixels.Y) }; // LWC_TODO: Precision loss
@@ -717,7 +749,7 @@ FScreenPassTexture FStreamlineViewExtension::PostProcessPassAtEnd_RenderThread(F
 		StreamlineArguments.CameraViewToClip = ViewUniformShaderParameters.ViewToClip;
 
 		StreamlineArguments.CameraPinholeOffset = FRHIStreamlineArguments::FVector2f::ZeroVector;
-		
+
 #if !ENGINE_PROVIDES_UE_5_6_ID3D12DYNAMICRHI_METHODS
 		if (LocalStreamlineRHIExtensions->NeedExtraPassesForDebugLayerCompatibility())
 		{
@@ -744,19 +776,19 @@ FScreenPassTexture FStreamlineViewExtension::PostProcessPassAtEnd_RenderThread(F
 			TArray<FRHIStreamlineResource, TInlineAllocator<4>> TexturesToTagOrUntag;
 			check(PassParameters->Depth);
 			PassParameters->Depth->MarkResourceAsUsed();
-			TexturesToTagOrUntag.Add(FRHIStreamlineResource::FromRDGTextureAccess(PassParameters->Depth, ViewRect, EStreamlineResource::Depth));
+			TexturesToTagOrUntag.Add(FRHIStreamlineResource::FromRDGTextureAccess(PassParameters->Depth, ViewRect, sl::kBufferTypeDepth));
 
 			// motion vectors are in the top left corner after the Velocity Combine pass
 			check(!!PassParameters->Velocity == bTagMotionVectors);
-			TexturesToTagOrUntag.Add(FRHIStreamlineResource::FromRDGTextureAccess(PassParameters->Velocity, EStreamlineResource::MotionVectors));
+			TexturesToTagOrUntag.Add(FRHIStreamlineResource::FromRDGTextureAccess(PassParameters->Velocity, sl::kBufferTypeMotionVectors));
 			if (bTagMotionVectors)
 			{
-				check(PassParameters->Velocity)
+				check(PassParameters->Velocity);
 				PassParameters->Velocity->MarkResourceAsUsed();
 			}
 
 			check(!!PassParameters->SceneColorWithoutHUD == bTagSceneColorWithoutHUD);
-			TexturesToTagOrUntag.Add(FRHIStreamlineResource::FromRDGTextureAccess(PassParameters->SceneColorWithoutHUD, SceneColor.ViewRect, EStreamlineResource::HUDLessColor));
+			TexturesToTagOrUntag.Add(FRHIStreamlineResource::FromRDGTextureAccess(PassParameters->SceneColorWithoutHUD, SceneColor.ViewRect, sl::kBufferTypeHUDLessColor));
 			if (bTagSceneColorWithoutHUD)
 			{
 				check(PassParameters->SceneColorWithoutHUD);
@@ -790,18 +822,20 @@ FScreenPassTexture FStreamlineViewExtension::PostProcessPassAtEnd_RenderThread(F
 	}
 
 	// DeepDVC render pass
-	if(IsDeepDVCActive())
+	if (IsDeepDVCActive())
 	{
 		NV_RDG_EVENT_SCOPE(GraphBuilder, StreamlineDeepDVC, "Streamline DeepDVC %dx%d [%d,%d -> %d,%d]",
 			SceneColor.ViewRect.Width(), SceneColor.ViewRect.Height(),
 			SceneColor.ViewRect.Min.X, SceneColor.ViewRect.Min.Y,
 			SceneColor.ViewRect.Max.X, SceneColor.ViewRect.Max.Y
 		);
+#if UE_VERSION_OLDER_THAN(5,8,0)
 		RDG_GPU_STAT_SCOPE(GraphBuilder, StreamlineDeepDVC);
+#endif
 		// we wont need to run this always since (unlike FG) we skip the whole evaluate pass
 
 		AddStreamlineDeepDVCStateRenderPass(GraphBuilder, ViewID, SecondaryViewRect);
-		
+
 		FRDGTextureRef SLSceneColorWithoutHUD = SceneColor.Texture;
 
 
@@ -821,7 +855,7 @@ FScreenPassTexture FStreamlineViewExtension::PostProcessPassAtEnd_RenderThread(F
 		const bool bHasImplicitUAVCompatibilityViaStreamlneSwapChainProvider = false;
 
 		const bool bIsUAVCompatible = EnumHasAllFlags(SceneColor.Texture->Desc.Flags, TexCreate_UAV);
-		const bool bNeedsCopies =!(bIsUAVCompatible || bHasImplicitUAVCompatibilityViaStreamlneSwapChainProvider);
+		const bool bNeedsCopies = !(bIsUAVCompatible || bHasImplicitUAVCompatibilityViaStreamlneSwapChainProvider);
 
 		if (bNeedsCopies)
 		{
@@ -831,18 +865,23 @@ FScreenPassTexture FStreamlineViewExtension::PostProcessPassAtEnd_RenderThread(F
 			SLSceneColorWithoutHUD = GraphBuilder.CreateTexture(DeepDVCIntermediateDesc, TEXT("Streamline.SceneColorWithoutHUD.DeepDVC"));
 			AddDrawTexturePass(GraphBuilder, ViewInfo, SceneColor.Texture, SLSceneColorWithoutHUD, FIntPoint::ZeroValue, FIntPoint::ZeroValue, FIntPoint::ZeroValue);
 		}
-		
+
 		AddStreamlineDeepDVCEvaluateRenderPass(StreamlineRHIExtensions, GraphBuilder, ViewID, SceneColor.ViewRect, SLSceneColorWithoutHUD);
-		
+
 		if (bNeedsCopies)
 		{
 			AddDrawTexturePass(GraphBuilder, ViewInfo, SLSceneColorWithoutHUD, SceneColor.Texture, FIntPoint::ZeroValue, FIntPoint::ZeroValue, FIntPoint::ZeroValue);
 		}
 	}
 
+	// Run render pass for each SL feature extension
+	FStreamlineExtensionModule::Get().ForEachFeature([&Inputs](IStreamlineFeature& Feature)
+	{
+		Feature.RenderPass_RenderThread(Inputs);
+	});
 
 #if ENGINE_SUPPORTS_CLEARQUADALPHA
-	if (ShouldTagStreamlineBuffers() &&  CVarStreamlineClearColorAlpha.GetValueOnRenderThread())
+	if (ShouldTagStreamlineBuffers(InputTypes) &&  CVarStreamlineClearColorAlpha.GetValueOnRenderThread())
 	{
 		auto* PassParameters = GraphBuilder.AllocParameters<FRenderTargetParameters>();
 		PassParameters->RenderTargets[0] = FRenderTargetBinding(SceneColor.Texture, ERenderTargetLoadAction::ENoAction);
@@ -875,5 +914,5 @@ FScreenPassTexture FStreamlineViewExtension::PostProcessPassAtEnd_RenderThread(F
 #endif
 	}
 }
+
 #undef LOCTEXT_NAMESPACE
- 

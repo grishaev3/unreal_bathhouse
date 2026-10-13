@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2022 - 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+* Copyright (c) 2022 - 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 *
 * NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
 * property and proprietary rights in and to this material, related
@@ -16,7 +16,7 @@ public class StreamlineBlueprint : ModuleRules
 {
 	protected virtual bool IsSupportedPlatform(ReadOnlyTargetRules Target)
 	{
-		return Target.Platform.IsInGroup(UnrealPlatformGroup.Windows);
+		return Target.Platform.IsInGroup(UnrealPlatformGroup.Windows) && (Target.Architecture == UnrealArch.X64);
 	}
 
 	public StreamlineBlueprint(ReadOnlyTargetRules Target) : base(Target)
@@ -35,41 +35,25 @@ public class StreamlineBlueprint : ModuleRules
 			}
 		);
 
-		PrivateIncludePaths.AddRange(
-			new string[] {
+		PublicDependencyModuleNames.AddRange(
+			new string[]
+			{
+				"StreamlineExtension",
 			}
 		);
 
 		bool bPlatformSupportsStreamline = IsSupportedPlatform(Target);
-	
+
 		PublicDefinitions.Add("WITH_STREAMLINE=" + (bPlatformSupportsStreamline ? '1' : '0'));
 
 		if (bPlatformSupportsStreamline)
-		{ 
-			PublicIncludePaths.AddRange(
-				new string[]
-				{
-				}
-			);
-
-			PrivateIncludePaths.AddRange(
-				new string[]
-				{
-				}
-			);
-
-			PublicDependencyModuleNames.AddRange(
-				new string[]
-				{
-					"StreamlineCore",
-				}
-			);
-
+		{
 			PrivateDependencyModuleNames.AddRange(
 				new string[]
 				{
+					"Streamline",
+					"StreamlineCore",
 					"StreamlineRHI",
-					"Streamline"
 				}
 			);
 		}

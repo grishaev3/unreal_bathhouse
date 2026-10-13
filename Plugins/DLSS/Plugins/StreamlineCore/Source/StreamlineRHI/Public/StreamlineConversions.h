@@ -11,8 +11,7 @@
 #pragma once
 
 #include "StreamlineRHI.h"
-#include "sl.h"
-#include "sl_helpers.h"
+#include "sl_core_types.h"
 
 inline sl::float4x4 ToSL(const FRHIStreamlineArguments::FMatrix44f& InMatrix, bool bIsOrthographicProjection = false)
 {
@@ -60,19 +59,4 @@ inline sl::Extent ToSL(const FIntRect& InRect)
 	return { uint32_t(InRect.Min.Y /* Y first intentionally*/), uint32_t(InRect.Min.X /* X second intentionally*/), 
 		uint32_t(InRect.Width()), uint32_t(InRect.Height())};
 };
-
-inline sl::BufferType ToSL(EStreamlineResource InResourceTag)
-{
-	switch (InResourceTag)
-	{
-	default:
-		checkf(false, TEXT("unexpected EStreamlineResource enum value %u. This is a UE Streamline plugin developer bug"), InResourceTag);
-	case EStreamlineResource::Depth: return sl::kBufferTypeDepth;
-	case EStreamlineResource::MotionVectors: return sl::kBufferTypeMotionVectors;
-	case EStreamlineResource::HUDLessColor: return sl::kBufferTypeHUDLessColor;
-	case EStreamlineResource::UIColorAndAlpha: return sl::kBufferTypeUIColorAndAlpha;
-	case EStreamlineResource::Backbuffer: return sl::kBufferTypeBackbuffer;
-	case EStreamlineResource::ScalingOutputColor: return sl::kBufferTypeScalingOutputColor;
-	}
-}
 

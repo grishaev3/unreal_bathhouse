@@ -29,4 +29,3 @@ class FRDGBuilder;
 void AddStreamlineDeepDVCStateRenderPass(FRDGBuilder& GraphBuilder, uint32 ViewID, const FIntRect& SecondaryViewRect);
 void AddStreamlineDeepDVCEvaluateRenderPass(FStreamlineRHI* StreamlineRHIExtensions, FRDGBuilder& GraphBuilder, uint32 ViewID, const FIntRect& SecondaryViewRect, FRDGTextureRef SLSceneColorWithoutHUD);
 void BeginRenderViewFamilyDeepDVC(FSceneViewFamily& InViewFamily);
-void GetDeepDVCStatusFromStreamline();

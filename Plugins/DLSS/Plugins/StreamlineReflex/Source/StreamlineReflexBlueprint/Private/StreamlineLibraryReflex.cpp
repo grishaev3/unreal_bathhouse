@@ -15,123 +15,23 @@
 
 #if WITH_STREAMLINE
 #include "StreamlineReflex.h"
-#include "StreamlineCore.h"
-#include "StreamlineRHI.h"
-
 #endif
 
 #include "Modules/ModuleManager.h"
 #include "HAL/IConsoleManager.h"
-#include "Interfaces/IPluginManager.h"
 
 #define LOCTEXT_NAMESPACE "FStreamlineReflexBlueprintModule"
 DEFINE_LOG_CATEGORY_STATIC(LogStreamlineReflexBlueprint, Log, All);
 
-#if WITH_STREAMLINE
-
-#define TRY_INIT_STREAMLINE_REFLEX_LIBRARY_AND_RETURN(ReturnValueOrEmptyOrVoidPreFiveThree) \
-if (!TryInitLibrary()) \
-{ \
-	UE_LOG(LogStreamlineReflexBlueprint, Error, TEXT("%s should not be called before PostEngineInit"), ANSI_TO_TCHAR(__FUNCTION__)); \
-	return ReturnValueOrEmptyOrVoidPreFiveThree; \
-}
-
-#else
-
-#define TRY_INIT_STREAMLINE_REFLEX_LIBRARY_AND_RETURN(ReturnValueWhichCanBeEmpty) 
-
-#endif
-
-
-EStreamlineFeatureSupport FStreamlineLibraryImplementationBase::FeatureSupport = EStreamlineFeatureSupport::NotSupportedByPlatformAtBuildTime;
-
-#if WITH_STREAMLINE
-
-bool FStreamlineLibraryImplementationBase::bIsLibraryInitialized = false;
-bool FStreamlineLibraryImplementationBase::TryInitLibrary()
-{
-	if (bIsLibraryInitialized)
-	{
-		return true;
-	}
-
-	if (IsStreamlineSupported())
-	{
-		if (GetPlatformStreamlineRHI()->IsReflexSupportedByRHI())
-		{
-
-			FeatureSupport = ToUStreamlineFeatureSupport(/* TODO generalize this when we use this class elsewhere */QueryStreamlineReflexSupport());
-		}
-		else
-		{
-			FeatureSupport = EStreamlineFeatureSupport::NotSupportedByRHI;
-		}
-	}
-	else
-	{
-		if (GetPlatformStreamlineSupport() == EStreamlineSupport::NotSupportedIncompatibleRHI)
-		{
-			FeatureSupport = EStreamlineFeatureSupport::NotSupportedByRHI;
-		}
-		else
-		{
-			FeatureSupport = EStreamlineFeatureSupport::NotSupported;
-		}
-	}
-
-	bIsLibraryInitialized = true;
-
-	return true;
-}
-#endif
 
 bool UStreamlineLibraryReflex::IsReflexSupported()
 {
-
-	TRY_INIT_STREAMLINE_REFLEX_LIBRARY_AND_RETURN(false);
-
-#if WITH_STREAMLINE
-	return QueryReflexSupport() == EStreamlineFeatureSupport::Supported;
-#else
-	return false;
-#endif
+	return UStreamlineLibrary::IsStreamlineFeatureSupported(TEXT("Reflex"));
 }
 
 EStreamlineFeatureSupport UStreamlineLibraryReflex::QueryReflexSupport()
 {
-#if WITH_STREAMLINE
-	
-	bool bIsMaxTickRateHandlerEnabled = false;
-	
-	TArray<IMaxTickRateHandlerModule*> MaxTickRateHandlerModules = IModularFeatures::Get()
-		.GetModularFeatureImplementations<IMaxTickRateHandlerModule>(IMaxTickRateHandlerModule::GetModularFeatureName());
-	for (IMaxTickRateHandlerModule* MaxTickRateHandler : MaxTickRateHandlerModules)
-	{
-		if (MaxTickRateHandler != GetStreamlineReflexMaxTickRateHandler())
-		{
-			continue;
-		}
-
-		bIsMaxTickRateHandlerEnabled = bIsMaxTickRateHandlerEnabled || MaxTickRateHandler->GetAvailable();
-	}
-	
-	bool bIsLatencyMarkerModuleEnabled = false;
-	
-	TArray<ILatencyMarkerModule*> LatencyMarkerModules = IModularFeatures::Get()
-		.GetModularFeatureImplementations<ILatencyMarkerModule>(ILatencyMarkerModule::GetModularFeatureName());
-	for (ILatencyMarkerModule* LatencyMarkerModule : LatencyMarkerModules)
-	{
-		if (LatencyMarkerModule != GetStreamlineReflexLatencyMarkerModule())
-		{
-			continue;
-		}
-
-		bIsLatencyMarkerModuleEnabled = bIsLatencyMarkerModuleEnabled || LatencyMarkerModule->GetAvailable();
-	}
-	
-	return bIsMaxTickRateHandlerEnabled && bIsLatencyMarkerModuleEnabled ? EStreamlineFeatureSupport::Supported : EStreamlineFeatureSupport::NotSupported;
-#endif
-	return EStreamlineFeatureSupport::NotSupportedByPlatformAtBuildTime;
+	return UStreamlineLibrary::QueryStreamlineFeatureSupport(TEXT("Reflex"));
 }
 
 #if WITH_STREAMLINE
@@ -200,8 +100,6 @@ EStreamlineReflexMode UStreamlineLibraryReflex::GetReflexMode()
 
 bool UStreamlineLibraryReflex::IsReflexModeSupported(EStreamlineReflexMode ReflexMode)
 {
-	TRY_INIT_STREAMLINE_REFLEX_LIBRARY_AND_RETURN(false);
-
 	if (ValidateEnumValue(ReflexMode, __FUNCTION__))
 	{
 		if (ReflexMode == EStreamlineReflexMode::Off)
@@ -224,8 +122,6 @@ TArray<EStreamlineReflexMode> UStreamlineLibraryReflex::GetSupportedReflexModes(
 {
 	TArray<EStreamlineReflexMode> SupportedQualityModes;
 
-	TRY_INIT_STREAMLINE_REFLEX_LIBRARY_AND_RETURN(SupportedQualityModes);
-
 	const UEnum* Enum = StaticEnum<EStreamlineReflexMode>();
 	for (int32 EnumIndex = 0; EnumIndex < Enum->NumEnums() - 1 /* avoid _MAX */; ++EnumIndex)
 	{
@@ -242,8 +138,6 @@ TArray<EStreamlineReflexMode> UStreamlineLibraryReflex::GetSupportedReflexModes(
 
 EStreamlineReflexMode UStreamlineLibraryReflex::GetDefaultReflexMode()
 {
-	TRY_INIT_STREAMLINE_REFLEX_LIBRARY_AND_RETURN(EStreamlineReflexMode::Off);
-
 	if (UStreamlineLibraryReflex::IsReflexSupported())
 	{
 		return EStreamlineReflexMode::Enabled;
@@ -308,20 +202,6 @@ float UStreamlineLibraryReflex::GetRenderLatencyInMs()
 	return 0.f;
 }
 
-void UStreamlineLibraryReflex::Startup()
-{
-#if WITH_STREAMLINE
-	UStreamlineLibrary::RegisterFeatureSupport(EStreamlineFeature::Reflex, UStreamlineLibraryReflex::QueryReflexSupport());
-#endif
-}
-
-void UStreamlineLibraryReflex::Shutdown()
-{
-#if WITH_STREAMLINE
-
-#endif
-}
-
 void FStreamlineLibraryReflexBlueprintModule::StartupModule()
 {
 	auto CVarInitializePlugin = IConsoleManager::Get().FindConsoleVariable(TEXT("r.Streamline.InitializePlugin"));
@@ -330,8 +210,6 @@ void FStreamlineLibraryReflexBlueprintModule::StartupModule()
 		UE_LOG(LogStreamlineReflexBlueprint, Log, TEXT("Initialization of StreamlineBlueprint is disabled."));
 		return;
 	}
-
-	UStreamlineLibraryReflex::Startup();
 }
 
 void FStreamlineLibraryReflexBlueprintModule::ShutdownModule()
@@ -352,8 +230,6 @@ void FStreamlineLibraryReflexBlueprintModule::ShutdownModule()
 #endif
 		return;
 	}
-
-	UStreamlineLibraryReflex::Shutdown();
 }
 
 IMPLEMENT_MODULE(FStreamlineLibraryReflexBlueprintModule, StreamlineReflexBlueprint)
