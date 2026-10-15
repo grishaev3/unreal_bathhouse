@@ -1,0 +1,29 @@
+Ассеты Fab, которые НЕ хранятся в git
+=====================================
+
+Эти паки исключены из репозитория (см. .gitignore), потому что занимают
+несколько гигабайт. После клонирования проекта добавьте их в проект через
+Fab в редакторе (Window -> Fab -> Add to Project). Пути должны совпасть
+с указанными ниже, иначе деревья в сцене будут без мешей.
+
+1. DZ Sample Trees  (автор: DZ Assets / DropZone Studios)
+   Папка в проекте: Content/DZ_Assets/
+   Используется: колоновидная осина (SM_Columnar_Aspen_1),
+                 пробковый дуб (SM_Cork_Oak_1),
+                 BP_Wind_Controller и MPC_Wind_Control (ветер деревьев и травы).
+   Пальмы из пака удалены из проекта — после добавления их можно удалить снова.
+
+2. Megaplants: Norway Spruce  (ель обыкновенная, Picea abies)
+   Папка в проекте: Content/Megaplant_Library/Tree_Norway_Spruce/
+
+3. Megaplants: Silver Birch  (берёза повислая, Betula pendula)
+   Папка в проекте: Content/Megaplant_Library/Tree_Silver_Birch/
+
+4. Megaplants: European Aspen  (осина обыкновенная, Populus tremula)
+   Папка в проекте: Content/Megaplant_Library/Tree_European_Aspen/
+   Используется поросль (Saplings) для осинника.
+
+Требования для Megaplants:
+- плагин Procedural Vegetation Editor включён (unreal_bathhouse.uproject);
+- r.Nanite.AllowAssemblies=True в Config/DefaultEngine.ini
+  (без этого у деревьев не отображаются листва и хвоя).
