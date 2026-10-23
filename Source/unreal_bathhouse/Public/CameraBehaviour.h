@@ -2,14 +2,11 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "CameraDirector.h"
 
-#include "TimeManager.h"          
-#include "BoundManager.h"
-#include "CameraModelManager.h"
-
-#include <memory>
 #include "CameraBehaviour.generated.h"
 
+// Актор-камера: каждый кадр берёт позу у FCameraDirector и применяет её
 UCLASS()
 class UNREAL_BATHHOUSE_API ACameraBehaviour : public AActor
 {
@@ -23,13 +20,8 @@ protected:
 	virtual void Tick(float DeltaTime) override;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera")
-
 	class UCameraComponent* CameraComponent;
 
 private:
-	void OnPeriodEnd(float NormalizedTime);
-
-	TUniquePtr<FTimeManager> TimeManager;
-	TUniquePtr<FBoundManager> BoundManager;
-	TUniquePtr<FCameraModelManager> ModelManager;
+	TUniquePtr<FCameraDirector> Director;
 };

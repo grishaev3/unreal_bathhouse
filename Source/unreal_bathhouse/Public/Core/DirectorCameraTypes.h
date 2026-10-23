@@ -1,32 +1,10 @@
 #pragma once
 
+#include "CoreMinimal.h"
 #include "UnityVector.h"
-#include "Math/Vector.h"
-#include <functional>
 
-// --- ПЕРЕЧИСЛЕНИЯ (С поддержкой Blueprints) ---
-UENUM(BlueprintType)
-enum class ECameraDirectionType : uint8
-{
-    Direct,
-    Center
-};
+// Все координаты — в системе Unity (метры, Y — вверх). В UE переводятся только в ACameraBehaviour.
 
-enum class EDirectionType : uint8
-{
-    Zero,
-    X,
-    Y,
-    Z
-};
-
-enum class ESunCircle : uint8 
-{
-    Day,
-    Night
-};
-
-// --- СТРУКТУРЫ ДАННЫХ ---
 struct FBoxBounds
 {
     FUnityVector Min;
@@ -34,15 +12,21 @@ struct FBoxBounds
     FUnityVector Size;
 };
 
+// Объём, в котором летает камера
 struct FBoundParameters
 {
     FBoxBounds Bound;
+
+    // Направление пролёта: компонента ±1 — ось движения, ±UE_BIG_NUMBER — граница объёма по Z.
+    // Используется только первый элемент.
     TArray<FUnityVector> CameraMovesets;
+
     FString Description;
 };
 
-// --- ДЕЛЕГАТЫ И ОПЕРЕЖАЮЩИЕ ОБЪЯВЛЕНИЯ ---
-class UCameraBase;
-
-// Аналог C# Func<float, CameraBase, Vector3>
-typedef std::function<FUnityVector(float, UCameraBase*)> FCameraMathFunc;
+// Положение камеры и точка, на которую она смотрит
+struct FCameraPose
+{
+    FUnityVector From;
+    FUnityVector At;
+};
