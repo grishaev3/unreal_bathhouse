@@ -494,3 +494,6 @@ Shipping/
 # Fab assets: not stored in git, add them to the project via Fab (same paths)
 Content/DZ_Assets/
 Content/Megaplant_Library/
+
+# Reference photos of the site (local only)
+Photos/
